@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rotation</title>
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-mini-chart.js"></script>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
+:root {
+  --bg: #030507;
+  --surface: #081019;
+  --card: #09111a;
+  --card-2: #0d1620;
+  --text: #edf2f7;
+  --dim: #b1bcc8;
+  --muted: #667383;
+  --silver: #B0B0B0;
+  --silver-bright: #D4D4D4;
+
+  --border: #1a1a1a;
+  --border-hover: #2A2A2A;
+
+  --green: #119600;
+  --green-2: #33AA00;
+  --green-soft: #77AA00;
+  --amber: #CC9900;
+  --orange: #DD6600;
+  --red: #AA0000;
+
+  --mono: 'JetBrains Mono','Cascadia Mono','Consolas',monospace;
+  --sans: 'DM Sans','Segoe UI',system-ui,sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --glow-subtle: 0 0 16px rgba(180,180,180,.05), 0 0 28px rgba(180,180,180,.025);
+  --shadow-panel: 0 10px 30px rgba(0,0,0,.32);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: flex;
+}
+
+.rot-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(42,71,104,.20), transparent 34%),
+    linear-gradient(180deg, #07111a 0%, #04070b 100%),
+    var(--bg);
+}
+
+.rot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,0));
+  flex-shrink: 0;
+}
+
+.rot-head-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.rot-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+.rot-sub {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--muted);
+}
+
+.rot-mode-group {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.rot-mode-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--sans);
+  letter-spacing: .01em;
+  background: transparent;
+  color: var(--dim);
+  transition: all .16s ease;
+}
+
+.rot-mode-btn:hover {
+  color: var(--text);
+  background: rgba(255,255,255,.03);
+}
+
+.rot-mode-btn.active {
+  background: #111111;
+  border-color: #232323;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.015), var(--glow-subtle);
+}
+
+.rot-body {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  position: relative;
+  display: flex;
+  gap: 10px;
+}
+
+.rot-stage-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rot-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,.03), transparent 54%),
+    linear-gradient(180deg, rgba(14,22,34,.98), rgba(6,9,13,.98));
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 18px 38px rgba(0,0,0,.34);
+}
+
+.rot-chart {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  background:
+    radial-gradient(circle at 50% 36%, rgba(255,255,255,.02), transparent 48%),
+    linear-gradient(180deg, #08111b 0%, #05090f 100%);
+}
+.rot-chart.dragging { cursor: grabbing; }
+
+.rot-svg {
+  display: block;
+}
+
+.rot-tip {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  z-index: 3;
+  min-width: 180px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #262626;
+  background: rgba(8,8,8,.96);
+  box-shadow: 0 18px 40px rgba(0,0,0,.45);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.rot-empty {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  z-index: 2;
+}
+
+.rot-grid-line {
+  stroke: rgba(255,255,255,0.055);
+  stroke-width: 1;
+}
+
+.rot-mid-line {
+  stroke: rgba(236,241,247,0.22);
+  stroke-width: 1.1;
+  stroke-dasharray: 5 6;
+}
+
+.rot-quad-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .38em;
+  opacity: .46;
+  text-transform: uppercase;
+}
+
+.rot-axis-label {
+  fill: rgba(230,236,243,.72);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.rot-axis-title {
+  fill: #FFFFFF;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.rot-last-label {
+  fill: #FFFFFF;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  stroke: rgba(0,0,0,.92);
+  stroke-width: 4px;
+  paint-order: stroke fill;
+}
+
+.rot-tail-glow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rot-tail-seg {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.rot-tail-dot {
+  stroke: none;
+}
+
+/* ---- Trail polish ---- */
+.rot-tail-glow {
+  filter: blur(0.4px);
+}
+.rot-tail-seg {
+  stroke-linejoin: round;
+  shape-rendering: geometricPrecision;
+}
+.rot-velocity-arrow {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  pointer-events: none;
+}
+.rot-head-ring {
+  fill: none;
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+.rot-head-pulse {
+  fill: none;
+  stroke-width: 1.4;
+  pointer-events: none;
+  opacity: 0;
+  animation: rotPulse 2.4s ease-out infinite;
+}
+@keyframes rotPulse {
+  0%   { r: 8;  opacity: .65; }
+  100% { r: 24; opacity: 0; }
+}
+.rot-dim {
+  opacity: 0.10;
+  transition: opacity .18s;
+}
+.rot-focus {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* ---- Side rail (ticker table) ---- */
+.rot-rail {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,.02), transparent 40%),
+    linear-gradient(180deg, rgba(14,22,34,.92), rgba(6,9,13,.92));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 12px 28px rgba(0,0,0,.30);
+  overflow: hidden;
+}
+.rot-rail-head {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.rot-rail-title { color: var(--dim); }
+.rot-rail-sort {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid transparent;
+  transition: all .12s;
+  user-select: none;
+}
+.rot-rail-sort:hover { color: var(--text); background: rgba(255,255,255,.08); border-color: var(--border-hover); }
+.rot-rail-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+.rot-rail-list::-webkit-scrollbar { width: 6px; }
+.rot-rail-list::-webkit-scrollbar-track { background: transparent; }
+.rot-rail-list::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+.rot-rail-list::-webkit-scrollbar-thumb:hover { background: #333; }
+
+.rot-rail-row {
+  display: grid;
+  /* dot · id (ticker+name) · badge · arrow · velocity */
+  grid-template-columns: 10px minmax(0, 1fr) auto 14px auto;
+  gap: 5px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background .12s, box-shadow .12s;
+}
+/* Directional heading arrow next to velocity (NE = heading toward LEADING) */
+.rot-rail-arrow {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  width: 14px;
+  user-select: none;
+}
+.rot-rail-row:hover { background: rgba(255,255,255,.03); }
+.rot-rail-row.focused {
+  background: rgba(67,162,72,.10);
+  box-shadow: inset 2px 0 0 #43a248;
+}
+.rot-rail-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rot-rail-id {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.rot-rail-tk {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+.rot-rail-name {
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rot-rail-quad {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 3px;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  line-height: 1;
+}
+.rot-rail-vel {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 36px;
+}
+@media (max-width: 720px) {
+  .rot-rail { display: none; }
+}
+
+/* TradingView mini chart popup on rail row hover */
+.rot-mini-popup {
+  position: fixed; left: 0; top: 0; z-index: 2050;
+  display: none; width: 320px;
+  background: #0f0f0f; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.62); overflow: hidden;
+  pointer-events: none; flex-direction: column;
+}
+.rot-mini-popup.show { display: flex; }
+.rot-mini-chart-area { height: 190px; overflow: hidden; flex-shrink: 0; }
+.rot-mini-info {
+  padding: 7px 12px 8px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.rot-mini-info-row { display: flex; justify-content: space-between; }
+.rot-mini-info-label { color: #667383; }
+.rot-mini-info-val   { color: #e2e8f0; }
+</style>
+</head>
+<body>
+<div class="rot-shell">
+  <div class="rot-body">
+    <div class="rot-stage-col">
+      <div class="rot-empty" id="rotEmpty">Rotation data unavailable.</div>
+      <div class="rot-stage">
+        <div class="rot-chart" id="rotationChart"></div>
+        <div class="rot-tip" id="rotTip"></div>
+      </div>
+    </div>
+    <aside class="rot-rail" id="rotRail">
+      <div class="rot-rail-head">
+        <span class="rot-rail-title" id="rotRailTitle">All Sectors</span>
+        <span class="rot-rail-sort" id="rotRailSort" title="Click to change sort">by Velocity ↓</span>
+      </div>
+      <div class="rot-rail-list" id="rotRailList"></div>
+    </aside>
+  </div>
+</div>
+<script>
+const ROTATION_DATA = {};
+const ROTATION_VIEWS = {"sectors":{"label":"Sectors","benchmark":"SHV","tickers":[{"ticker":"XLK","name":"Technology","color":"#00AAFF"},{"ticker":"XLF","name":"Financials","color":"#FF6600"},{"ticker":"XLV","name":"Healthcare","color":"#FF3366"},{"ticker":"XLY","name":"Cons. Disc.","color":"#FFAA00"},{"ticker":"XLI","name":"Industrials","color":"#AAAACC"},{"ticker":"XLC","name":"Comm. Svcs","color":"#CC44FF"},{"ticker":"XLE","name":"Energy","color":"#FF4400"},{"ticker":"XLB","name":"Materials","color":"#BB8866"},{"ticker":"XLP","name":"Cons. Staples","color":"#33CC66"},{"ticker":"XLRE","name":"Real Estate","color":"#00CCAA"},{"ticker":"XLU","name":"Utilities","color":"#8855DD"}]},"crossAsset":{"label":"Cross-Asset","benchmark":"SHV","tickers":[{"ticker":"SPY","name":"S&P 500","color":"#EAEAEA"},{"ticker":"DIA","name":"Dow Jones","color":"#00CCAA"},{"ticker":"QQQ","name":"Nasdaq 100","color":"#00AAFF"},{"ticker":"IWM","name":"Small Caps","color":"#FF6600"},{"ticker":"MDY","name":"Mid Caps","color":"#AADDFF"},{"ticker":"VEU","name":"Intl Stocks","color":"#33CC66"},{"ticker":"TLT","name":"20Y+ Bonds","color":"#AAAACC"},{"ticker":"HYG","name":"High Yield","color":"#CC44FF"},{"ticker":"GLD","name":"Gold","color":"#FFD700"},{"ticker":"SLV","name":"Silver","color":"#C0C0C0"},{"ticker":"USO","name":"Crude Oil","color":"#FF4400"},{"ticker":"CPER","name":"Copper","color":"#BB8866"},{"ticker":"IBIT","name":"Bitcoin","color":"#FF9900"}]},"themes":{"label":"Themes","benchmark":"SPY","tickers":[]}};
+
+// Stable color from a ticker string (for themes — many tickers, no curated palette)
+function rotThemeColor(ticker){
+  let h = 0;
+  const s = String(ticker || '');
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  return 'hsl(' + hue + ',62%,62%)';
+}
+// Build the 'themes' view ticker list from server-provided _themesMeta
+function rotPopulateThemesView(){
+  const meta = ROTATION_DATA && ROTATION_DATA._themesMeta;
+  if (!Array.isArray(meta) || !meta.length) return;
+  const themesView = ROTATION_VIEWS.themes;
+  if (!themesView) return;
+  themesView.tickers = meta.map(m => ({
+    ticker: m.ticker,
+    name: m.name || m.ticker,
+    color: rotThemeColor(m.ticker),
+  }));
+}
+const SVG_NS='http://www.w3.org/2000/svg';
+let rotMode='sectors';
+let rotRenderTimer=0;
+const rotViewByMode={};
+let rotDragState=null;
+let rotPanBound=0;
+// Focus + sort state for the side rail
+let rotFocusTk=null;
+const _ROT_SORT_VALID=['heading','velocity','ratio','momentum','reversal'];
+let rotSortBy=(()=>{ try{ const s=localStorage.getItem('gekko_rot_sort_v1'); return _ROT_SORT_VALID.includes(s)?s:'heading'; }catch(_e){ return 'heading'; } })();
+let rotRailOrder=[]; // current sorted ticker order in the rail (for keyboard nav)
+let rotKeyBound=0;
+const ROT_QUAD_INFO = {
+  leading:   { label:'LEADING',   short:'LEAD', hex:'#43a248' },
+  improving: { label:'IMPROVING', short:'IMPR', hex:'#4a78bc' },
+  weakening: { label:'WEAKENING', short:'WEAK', hex:'#ab8d28' },
+  lagging:   { label:'LAGGING',   short:'LAGG', hex:'#b14f4f' },
+};
+function rotQuadOf(x,y){
+  if (x>=100 && y>=100) return 'leading';
+  if (x>=100 && y< 100) return 'weakening';
+  if (x< 100 && y>=100) return 'improving';
+  return 'lagging';
+}
+// Average per-step motion across the last 4 weeks of the tail
+function rotVelocity(tail){
+  if (!tail || tail.length < 2) return 0;
+  const end = tail.length;
+  const start = Math.max(1, end - 4);
+  let sum = 0, n = 0;
+  for (let i = start; i < end; i++){
+    const a = tail[i-1], b = tail[i];
+    if (!a || !b) continue;
+    sum += Math.hypot(b.x - a.x, b.y - a.y);
+    n++;
+  }
+  return n ? sum / n : 0;
+}
+function rotVelocityVec(tail){
+  if (!tail || tail.length < 2) return { dx:0, dy:0 };
+  const end = tail.length;
+  const a = tail[Math.max(0, end-3)], b = tail[end-1];
+  return { dx: b.x - a.x, dy: b.y - a.y };
+}
+// "Heading toward LEADING" score — alignment-dominant.
+// Formula: √magnitude × cos⁵(angle − 45°)
+//   • Alignment is *decisive* (5th power steeply penalises off-axis motion)
+//   • Magnitude contributes diminishing returns (sqrt, not linear)
+//     so a 4x-faster mover only doubles the score
+//   • Net effect: a clean NE arrow always outranks a flat E arrow
+//     unless the E arrow is ~32x faster (basically never)
+//
+//   ↗ NE perfect   → factor  1.000  (max positive)
+//   ↑ N or → E     → factor  0.177  (one axis only — half-credit alignment, then cubed twice more)
+//   ↖ NW or ↘ SE   → factor  0      (orthogonal to NE)
+//   ← W or ↓ S     → factor -0.177
+//   ↙ SW perfect   → factor -1.000  (max negative)
+function rotHeadingScore(tail){
+  const v = rotVelocityVec(tail);
+  const mag = Math.hypot(v.dx, v.dy);
+  if (mag < 0.04) return 0;                              // basically stationary
+  const ang = Math.atan2(v.dy, v.dx);                    // 0=E, π/2=N, π/4=NE
+  const align = Math.cos(ang - Math.PI / 4);             // -1..+1, peak at NE
+  const align5 = align * align * align * align * align;  // 5th power: sign-preserving
+  return Math.sqrt(mag) * align5;                        // sqrt(mag) × align^5
+}
+// Reversal score — measures how much the heading has recently changed toward/away from LEADING.
+//   Compares the "old" direction (tail[n-5]→tail[n-3]) vs the "new" direction (tail[n-3]→tail[n-1]).
+//   Positive → pivoted more toward NE (bullish turn)
+//   Negative → pivoted away from NE (bearish turn)
+//   ≈ 0     → travelling in a straight line (no reversal)
+//   Weighted by √min(oldMag, newMag) so both legs need real movement to score high.
+function rotReversalScore(tail){
+  if (!tail || tail.length < 5) return 0;
+  const n = tail.length;
+  // Old leg: ~4 periods ago → ~2 periods ago
+  const oA = tail[Math.max(0, n - 5)], oB = tail[Math.max(0, n - 3)];
+  const oDx = oB.x - oA.x, oDy = oB.y - oA.y;
+  const oMag = Math.hypot(oDx, oDy);
+  // New leg: ~2 periods ago → now  (same window as rotVelocityVec)
+  const nA = tail[Math.max(0, n - 3)], nB = tail[n - 1];
+  const nDx = nB.x - nA.x, nDy = nB.y - nA.y;
+  const nMag = Math.hypot(nDx, nDy);
+  if (oMag < 0.04 || nMag < 0.04) return 0;            // too stationary to judge
+  // NE-alignment using same cos^5 formula as rotHeadingScore
+  function neAlign(dx, dy){
+    const a = Math.cos(Math.atan2(dy, dx) - Math.PI / 4);
+    return a * a * a * a * a;                            // sign-preserving 5th power
+  }
+  return (neAlign(nDx, nDy) - neAlign(oDx, oDy)) * Math.sqrt(Math.min(oMag, nMag));
+}
+// 8-way arrow icon for the heading direction. Returns { arrow, color }.
+//   ↗ NE (heading toward LEADING)  — green
+//   ↖ NW (heading toward IMPROVING) — blue
+//   ↘ SE (heading toward WEAKENING) — amber
+//   ↙ SW (heading toward LAGGING)  — red
+//   compass cardinal arrows for in-between cases
+function rotHeadingArrow(tail){
+  const v = rotVelocityVec(tail);
+  const mag = Math.hypot(v.dx, v.dy);
+  if (mag < 0.04) return { arrow:'·', color:'#667383' };  // basically stationary
+  // Angle in degrees (0° = +X "east", 90° = +Y "north"). Note: in RRG, +Y is up (momentum increasing).
+  let deg = Math.atan2(v.dy, v.dx) * 180 / Math.PI;
+  if (deg < 0) deg += 360;
+  // 8-sector compass starting at 0° = E, rotating CCW.
+  const sectors = [
+    { lo:   0, hi:  22.5, arrow:'→', color:'#94a3b8' }, // E
+    { lo:  22.5, hi:  67.5, arrow:'↗', color:'#a5e077' }, // NE → toward LEADING
+    { lo:  67.5, hi: 112.5, arrow:'↑', color:'#86efac' }, // N
+    { lo: 112.5, hi: 157.5, arrow:'↖', color:'#7DCFFF' }, // NW → toward IMPROVING
+    { lo: 157.5, hi: 202.5, arrow:'←', color:'#94a3b8' }, // W
+    { lo: 202.5, hi: 247.5, arrow:'↙', color:'#f87171' }, // SW → toward LAGGING
+    { lo: 247.5, hi: 292.5, arrow:'↓', color:'#fca5a5' }, // S
+    { lo: 292.5, hi: 337.5, arrow:'↘', color:'#facc15' }, // SE → toward WEAKENING
+    { lo: 337.5, hi: 360.0, arrow:'→', color:'#94a3b8' }, // E (wrap)
+  ];
+  for (const s of sectors){ if (deg >= s.lo && deg < s.hi) return { arrow: s.arrow, color: s.color }; }
+  return { arrow:'·', color:'#667383' };
+}
+
+function rotClamp(v,min,max){
+  const n=Number(v);
+  if(!Number.isFinite(n)) return min;
+  return Math.min(max,Math.max(min,n));
+}
+function rotGetView(mode){
+  if(!rotViewByMode[mode]) rotViewByMode[mode]={zoom:1,cx:100,cy:100};
+  return rotViewByMode[mode];
+}
+function rotClampView(base,state){
+  if(!base||!state) return {xMin:97,xMax:103,yMin:97,yMax:103,xSpan:6,ySpan:6};
+  const zoom=rotClamp(state.zoom||1,1,16);
+  const halfX=Math.max(0.5,(base.xSpan/2)/zoom);
+  const halfY=Math.max(0.5,(base.ySpan/2)/zoom);
+  const minCx=base.xMin+halfX;
+  const maxCx=base.xMax-halfX;
+  const minCy=base.yMin+halfY;
+  const maxCy=base.yMax-halfY;
+  state.zoom=zoom;
+  state.cx=rotClamp(Number.isFinite(state.cx)?state.cx:100,minCx,maxCx);
+  state.cy=rotClamp(Number.isFinite(state.cy)?state.cy:100,minCy,maxCy);
+  return {
+    xMin:state.cx-halfX,
+    xMax:state.cx+halfX,
+    yMin:state.cy-halfY,
+    yMax:state.cy+halfY,
+    xSpan:halfX*2,
+    ySpan:halfY*2
+  };
+}
+function rotResetView(mode){
+  const st=rotGetView(mode);
+  st.zoom=1;
+  st.cx=100;
+  st.cy=100;
+}
+function rotBindPanHandlers(){
+  if(rotPanBound) return;
+  rotPanBound=1;
+  window.addEventListener('mousemove',evt=>{
+    if(!rotDragState) return;
+    const st=rotGetView(rotDragState.mode);
+    st.cx=rotDragState.startCx-(evt.clientX-rotDragState.startX)*(rotDragState.viewXSpan/rotDragState.plotW);
+    st.cy=rotDragState.startCy+(evt.clientY-rotDragState.startY)*(rotDragState.viewYSpan/rotDragState.plotH);
+    rotClampView(rotDragState.base,st);
+    rotQueueRender();
+  });
+  window.addEventListener('mouseup',()=>{
+    if(!rotDragState) return;
+    rotDragState=null;
+    const host=document.getElementById('rotationChart');
+    if(host) host.classList.remove('dragging');
+  });
+  window.addEventListener('blur',()=>{rotDragState=null;});
+}
+
+function rotSetMode(mode,btn){
+  rotMode=mode;
+  document.querySelectorAll('.rot-mode-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderRotation();
+}
+function rotFmtDateShort(v){
+  if(v==null||v==='') return '';
+  if(v instanceof Date && Number.isFinite(v.getTime())) return `${v.getMonth()+1}-${v.getDate()}-${v.getFullYear()}`;
+  const s=String(v).trim();
+  if(!s) return '';
+  const iso=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(iso) return `${Number(iso[2])}-${Number(iso[3])}-${iso[1]}`;
+  const dt=new Date(s);
+  if(Number.isFinite(dt.getTime())) return `${dt.getMonth()+1}-${dt.getDate()}-${dt.getFullYear()}`;
+  return s;
+}
+function rotTooltipHtml(item,point){
+  const quad=point.x>=100?(point.y>=100?'Leading':'Weakening'):(point.y>=100?'Improving':'Lagging');
+  const qc=point.x>=100?(point.y>=100?'#44bb22':'#ddaa22'):(point.y>=100?'#5599ee':'#dd5555');
+  const chg=ROTATION_DATA._chg1d&&ROTATION_DATA._chg1d[item.ticker];
+  const chgHtml=chg!=null
+    ?`<span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${chg>=0?'#4ade80':'#f87171'};margin-left:10px;">${chg>=0?'+':''}${chg.toFixed(2)}%</span>`
+    :'';
+  return `<div style="line-height:1.5;">
+    <div style="margin-bottom:4px;">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:6px;vertical-align:middle"></span>
+      <b style="font-family:'JetBrains Mono',monospace;color:#fff;">${item.ticker}</b>
+      <span style="color:#b0b0b0;">(${item.name})</span>${chgHtml}
+    </div>
+
+    <div>
+      <span style="color:#60a5fa;">RS-Ratio:</span>
+      <span style="font-family:'JetBrains Mono',monospace;color:#e2e8f0;">${point.x.toFixed(2)}</span>
+    </div>
+
+    <div>
+      <span style="color:#34d399;">RS-Momentum:</span>
+      <span style="font-family:'JetBrains Mono',monospace;color:#e2e8f0;">${point.y.toFixed(2)}</span>
+    </div>
+
+    <div style="margin-top:4px;">
+      <span style="color:#c084fc;">Quadrant:</span>
+      <span style="font-family:'JetBrains Mono',monospace;color:${qc};font-weight:600;">${quad}</span>
+    </div>
+
+  </div>`;
+}
+function rotMakeEl(tag,attrs){
+  const el=document.createElementNS(SVG_NS,tag);
+  Object.entries(attrs||{}).forEach(([k,v])=>{if(v!=null)el.setAttribute(k,String(v));});
+  return el;
+}
+function rotHexToRgba(hex,alpha){
+  const raw=String(hex||'').replace('#','');
+  if(raw.length!==6) return `rgba(255,255,255,${alpha})`;
+  const n=parseInt(raw,16);
+  if(!Number.isFinite(n)) return `rgba(255,255,255,${alpha})`;
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
+}
+function rotHideTip(){
+  const tip=document.getElementById('rotTip');
+  if(tip) tip.style.display='none';
+}
+function rotShowTip(evt,host,item,point){
+  const tip=document.getElementById('rotTip');
+  const stage=tip&&tip.parentElement;
+  if(!tip||!stage) return;
+  tip.innerHTML=rotTooltipHtml(item,point);
+  tip.style.display='block';
+  const rect=stage.getBoundingClientRect();
+  const x=(evt.clientX||0)-rect.left;
+  const y=(evt.clientY||0)-rect.top;
+  const pad=12;
+  let left=x+20;
+  let top=y+12;
+  if(left+tip.offsetWidth>rect.width-pad) left=x-tip.offsetWidth-22;
+  if(left<pad) left=pad;
+  if(top+tip.offsetHeight>rect.height-pad) top=y-tip.offsetHeight-12;
+  if(top<pad) top=pad;
+  tip.style.left=left+'px';
+  tip.style.top=top+'px';
+}
+function rotQueueRender(){
+  if(rotRenderTimer) cancelAnimationFrame(rotRenderTimer);
+  rotRenderTimer=requestAnimationFrame(()=>{rotRenderTimer=0;renderRotation();});
+}
+function rotBuildSeries(cfg,modeData){
+  return (cfg.tickers||[]).map(item=>{
+    const tail=(modeData[item.ticker]||[]).slice(-16).map(r=>({
+      x:+Number(r.rsRatio).toFixed(2),
+      y:+Number(r.rsMomentum).toFixed(2),
+      date:r.date||''
+    })).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+    return {item,tail};
+  }).filter(s=>s.tail.length>=2);
+}
+function rotAttachInteractions(host,view,base,margin,plotW,plotH){
+  if(!host) return;
+  // Mouse wheel: zoom in/out around the cursor position
+  host.onwheel = function(evt){
+    evt.preventDefault();
+    const rect = host.getBoundingClientRect();
+    const mx = evt.clientX - rect.left;
+    const my = evt.clientY - rect.top;
+    // Convert mouse position to data coordinates (use the *current* view)
+    const xAt = view.xMin + ((mx - margin.left) / plotW) * view.xSpan;
+    const yAt = view.yMin + ((margin.top + plotH - my) / plotH) * view.ySpan;
+    const st = rotGetView(rotMode);
+    const factor = evt.deltaY < 0 ? 1.18 : 1 / 1.18;  // scroll up = zoom in
+    const newZoom = Math.max(1, Math.min(16, (st.zoom || 1) * factor));
+    if (newZoom === st.zoom) return;
+    // Recenter so the data point under the cursor stays fixed during zoom
+    st.zoom = newZoom;
+    const halfX = Math.max(0.5, (base.xSpan / 2) / newZoom);
+    const halfY = Math.max(0.5, (base.ySpan / 2) / newZoom);
+    const fx = (mx - margin.left) / plotW;        // 0..1 across the plot
+    const fy = (margin.top + plotH - my) / plotH; // 0..1 from bottom up
+    st.cx = xAt - (fx - 0.5) * (halfX * 2);
+    st.cy = yAt - (fy - 0.5) * (halfY * 2);
+    rotClampView(base, st);
+    rotQueueRender();
+  };
+  // Mouse drag: pan the view
+  host.onmousedown = function(evt){
+    if (evt.button !== 0) return;
+    const st = rotGetView(rotMode);
+    if ((st.zoom || 1) <= 1.001) return;  // no panning at full-fit zoom
+    rotDragState = {
+      mode: rotMode,
+      startX: evt.clientX,
+      startY: evt.clientY,
+      startCx: st.cx,
+      startCy: st.cy,
+      base: base,
+      viewXSpan: view.xSpan,
+      viewYSpan: view.ySpan,
+      plotW: plotW,
+      plotH: plotH,
+    };
+    host.classList.add('dragging');
+    rotHideTip();
+  };
+  // Double-click: reset zoom to full-fit
+  host.ondblclick = function(){
+    rotResetView(rotMode);
+    rotQueueRender();
+  };
+  host.onmouseleave = ()=>{ rotHideTip(); hideRotMiniChart(); }; // rotHideTip kept for any residual tip state
+}
+function renderRotation(){
+  const host=document.getElementById('rotationChart');
+  const empty=document.getElementById('rotEmpty');
+  const cfg=ROTATION_VIEWS[rotMode]||ROTATION_VIEWS.sectors;
+  const modeData=ROTATION_DATA[rotMode]||{};
+  if(!host) return;
+  const built=rotBuildSeries(cfg,modeData);
+  const pts=[];
+  built.forEach(s=>s.tail.forEach(p=>pts.push(p)));
+  if(!pts.length){
+    host.innerHTML='';
+    if(empty){empty.textContent='Rotation data unavailable.';empty.style.display='flex';}
+    return;
+  }
+  if(empty) empty.style.display='none';
+  const rect=host.getBoundingClientRect();
+  const width=Math.max(720,Math.floor(rect.width||960));
+  const height=Math.max(460,Math.floor(rect.height||560));
+  const margin={top:18,right:18,bottom:18,left:18};
+  const plotW=Math.max(200,width-margin.left-margin.right);
+  const plotH=Math.max(160,height-margin.top-margin.bottom);
+  let xMin=97,xMax=103,yMin=97,yMax=103;
+  pts.forEach(p=>{
+    if(p.x<xMin)xMin=p.x;
+    if(p.x>xMax)xMax=p.x;
+    if(p.y<yMin)yMin=p.y;
+    if(p.y>yMax)yMax=p.y;
+  });
+  const spanX=Math.max(0.8,xMax-xMin);
+  const spanY=Math.max(0.8,yMax-yMin);
+  const padBase=Math.max(Math.max(spanX,spanY)*0.05,0.32);
+  const xPad=Math.max(spanX*0.07,padBase);
+  const yPad=Math.max(spanY*0.07,padBase);
+  xMin-=xPad;
+  xMax+=xPad;
+  yMin-=yPad;
+  yMax+=yPad;
+  const midPad=Math.max(padBase*0.9,0.4);
+  if(100<xMin) xMin=100-midPad;
+  if(100>xMax) xMax=100+midPad;
+  if(100<yMin) yMin=100-midPad;
+  if(100>yMax) yMax=100+midPad;
+  const base={
+    xMin,yMin,xMax,yMax,
+    xSpan:Math.max(1,xMax-xMin),
+    ySpan:Math.max(1,yMax-yMin)
+  };
+  const st=rotGetView(rotMode);
+  const view=rotClampView(base,st);
+  const xPx=v=>margin.left+((v-view.xMin)/view.xSpan)*plotW;
+  const yPx=v=>margin.top+plotH-((v-view.yMin)/view.ySpan)*plotH;
+  host.innerHTML='';
+  const svg=rotMakeEl('svg',{class:'rot-svg',width:'100%',height:'100%',viewBox:`0 0 ${width} ${height}`,preserveAspectRatio:'xMidYMid meet'});
+  const defs=rotMakeEl('defs');
+  const clipId='rotClip-'+rotMode;
+  const clip=rotMakeEl('clipPath',{id:clipId});
+  clip.appendChild(rotMakeEl('rect',{x:margin.left,y:margin.top,width:plotW,height:plotH}));
+  defs.appendChild(clip);
+  svg.appendChild(defs);
+
+  const bg=rotMakeEl('g',{'clip-path':`url(#${clipId})`});
+  const addQuad=(x0,x1,y0,y1,fill,label,color,anchor)=>{
+    const xLo=Math.max(Math.min(x0,x1),view.xMin);
+    const xHi=Math.min(Math.max(x0,x1),view.xMax);
+    const yLo=Math.max(Math.min(y0,y1),view.yMin);
+    const yHi=Math.min(Math.max(y0,y1),view.yMax);
+    if(!(xHi>xLo && yHi>yLo)) return;
+    const x=xPx(xLo);
+    const y=yPx(yHi);
+    const w=Math.max(0,xPx(xHi)-xPx(xLo));
+    const h=Math.max(0,yPx(yLo)-yPx(yHi));
+    bg.appendChild(rotMakeEl('rect',{x,y,width:w,height:h,fill,class:'rot-quad-fill'}));
+    if(w>=130 && h>=72){
+      const right=String(anchor||'').includes('right');
+      const bottom=String(anchor||'').includes('bottom');
+      const tx=right ? x+w-24 : x+24;
+      const ty=bottom ? y+h-22 : y+26;
+      const t=rotMakeEl('text',{x:tx,y:ty,'text-anchor':right?'end':'start',class:'rot-quad-title',fill:color});
+      t.textContent=label;
+      bg.appendChild(t);
+    }
+  };
+  addQuad(view.xMin,100,100,view.yMax,'rgba(18,35,62,0.34)','IMPROVING','#4a78bc','left-top');
+  addQuad(100,view.xMax,100,view.yMax,'rgba(10,40,16,0.34)','LEADING','#43a248','right-top');
+  addQuad(view.xMin,100,view.yMin,100,'rgba(54,14,18,0.34)','LAGGING','#b14f4f','left-bottom');
+  addQuad(100,view.xMax,view.yMin,100,'rgba(48,40,10,0.32)','WEAKENING','#ab8d28','right-bottom');
+  const grid=rotMakeEl('g',{'clip-path':`url(#${clipId})`});
+  for(let xv=Math.ceil(view.xMin);xv<=Math.floor(view.xMax);xv++){ 
+    const px=xPx(xv);
+    grid.appendChild(rotMakeEl('line',{x1:px,y1:margin.top,x2:px,y2:margin.top+plotH,class:'rot-grid-line'}));
+  }
+  for(let yv=Math.ceil(view.yMin);yv<=Math.floor(view.yMax);yv++){ 
+    const py=yPx(yv);
+    grid.appendChild(rotMakeEl('line',{x1:margin.left,y1:py,x2:margin.left+plotW,y2:py,class:'rot-grid-line'}));
+  }
+  svg.appendChild(grid);
+  if(100>=view.xMin && 100<=view.xMax){
+    const cx=xPx(100);
+    bg.appendChild(rotMakeEl('line',{x1:cx,y1:margin.top,x2:cx,y2:margin.top+plotH,class:'rot-mid-line'}));
+  }
+  if(100>=view.yMin && 100<=view.yMax){
+    const cy=yPx(100);
+    bg.appendChild(rotMakeEl('line',{x1:margin.left,y1:cy,x2:margin.left+plotW,y2:cy,class:'rot-mid-line'}));
+  }
+  svg.appendChild(bg);
+  const dataLayer=rotMakeEl('g',{'clip-path':`url(#${clipId})`});
+  svg.appendChild(dataLayer);
+
+  // Re-validate focus: if it's not in the current view, clear it
+  if (rotFocusTk && !built.some(s => s.item.ticker === rotFocusTk)) rotFocusTk = null;
+
+  built.forEach(series=>{
+    const tail=series.tail;
+    const item=series.item;
+    const isFocused = rotFocusTk === item.ticker;
+    const isDim = rotFocusTk && !isFocused;
+    const groupAttrs = { style: 'color:'+item.color };
+    if (isDim) groupAttrs.class = 'rot-dim';
+    else if (isFocused) groupAttrs.class = 'rot-focus';
+    const g = rotMakeEl('g', groupAttrs);
+
+    // Underglow: slightly stronger when focused, also a soft outer halo for crispness
+    const points = tail.map(p=>`${xPx(p.x)},${yPx(p.y)}`).join(' ');
+    g.appendChild(rotMakeEl('polyline',{
+      points,
+      class:'rot-tail-glow',
+      stroke:rotHexToRgba(item.color, isFocused ? 0.34 : 0.16),
+      'stroke-width': isFocused ? '8.5' : '5.6'
+    }));
+    // Per-segment fading stroke (older→newer alpha + width)
+    for(let i=0;i<tail.length-1;i++){
+      const a=tail[i],b=tail[i+1];
+      const fade=(i+1)/Math.max(tail.length-1,1);
+      g.appendChild(rotMakeEl('line',{
+        x1:xPx(a.x),y1:yPx(a.y),x2:xPx(b.x),y2:yPx(b.y),
+        class:'rot-tail-seg',
+        stroke:rotHexToRgba(item.color, 0.20+fade*0.74),
+        'stroke-width':(0.95 + fade*(isFocused ? 3.6 : 2.8)).toFixed(2)
+      }));
+    }
+    // Per-point fading dots along the tail
+    for(let i=0;i<tail.length-1;i++){
+      const p=tail[i];
+      const fade=(i+1)/Math.max(tail.length-1,1);
+      g.appendChild(rotMakeEl('circle',{
+        cx:xPx(p.x),cy:yPx(p.y),r:(1.25 + fade*1.05).toFixed(2),
+        class:'rot-tail-dot',
+        fill:rotHexToRgba(item.color, 0.16+fade*0.46)
+      }));
+    }
+    // Velocity arrow at the head (always shown — small but visible)
+    const v = rotVelocityVec(tail);
+    const vMag = Math.hypot(v.dx, v.dy);
+    if (vMag > 0.04) {
+      const last = tail[tail.length-1];
+      const lx0 = xPx(last.x), ly0 = yPx(last.y);
+      // Direction in screen space (flip Y for SVG)
+      const ux = (xPx(last.x + v.dx) - lx0);
+      const uy = (yPx(last.y + v.dy) - ly0);
+      const sm = Math.hypot(ux, uy) || 1;
+      const arrowLen = isFocused ? 28 : 22;
+      const ax = lx0 + (ux/sm) * arrowLen;
+      const ay = ly0 + (uy/sm) * arrowLen;
+      const ang = Math.atan2(ay - ly0, ax - lx0);
+      const ah = isFocused ? 8 : 6.5;
+      const ahx1 = ax - ah * Math.cos(ang - 0.42);
+      const ahy1 = ay - ah * Math.sin(ang - 0.42);
+      const ahx2 = ax - ah * Math.cos(ang + 0.42);
+      const ahy2 = ay - ah * Math.sin(ang + 0.42);
+      g.appendChild(rotMakeEl('line',{
+        x1: lx0, y1: ly0, x2: ax, y2: ay,
+        class:'rot-velocity-arrow',
+        stroke: rotHexToRgba(item.color, isFocused ? 0.95 : 0.82),
+        'stroke-width': isFocused ? 2.6 : 1.9,
+      }));
+      g.appendChild(rotMakeEl('path',{
+        d: `M${ahx1.toFixed(1)},${ahy1.toFixed(1)} L${ax.toFixed(1)},${ay.toFixed(1)} L${ahx2.toFixed(1)},${ahy2.toFixed(1)}`,
+        class:'rot-velocity-arrow',
+        stroke: rotHexToRgba(item.color, isFocused ? 0.95 : 0.82),
+        'stroke-width': isFocused ? 2.6 : 1.9,
+      }));
+    }
+    // Head dot (and pulse when focused)
+    const last=tail[tail.length-1];
+    const lx=xPx(last.x), ly=yPx(last.y);
+    if (isFocused) {
+      g.appendChild(rotMakeEl('circle',{cx:lx, cy:ly, r:8, class:'rot-head-pulse', stroke:item.color}));
+    }
+    g.appendChild(rotMakeEl('circle',{cx:lx, cy:ly, r: isFocused ? 10 : 8.6, fill: rotHexToRgba(item.color, 0.20)}));
+    g.appendChild(rotMakeEl('circle',{cx:lx, cy:ly, r: isFocused ? 8 : 6.9, fill:item.color, stroke:'#ffffff', 'stroke-width': isFocused ? 2.5 : 2.1, class:'rot-last-dot'}));
+
+    // Label
+    const labelRight=last.x>=100;
+    const labelUp=last.y>=100;
+    const label=rotMakeEl('text',{
+      x:lx+(labelRight?12:-12),
+      y:ly+(labelUp?-14:18),
+      'text-anchor':labelRight?'start':'end',
+      class:'rot-last-label',
+      fill:'#ffffff',
+      stroke:'rgba(0,0,0,.88)'
+    });
+    label.textContent=item.ticker;
+    g.appendChild(label);
+
+    // Large transparent hit circle for hover/click
+    const hit=rotMakeEl('circle',{cx:lx,cy:ly,r:48,fill:'transparent',style:'cursor:pointer'});
+    hit.addEventListener('mouseenter',evt=>{ showRotMiniChart(item.ticker,item,last,evt); });
+    hit.addEventListener('mousemove',evt=>{ showRotMiniChart(item.ticker,item,last,evt); });
+    hit.addEventListener('mouseleave',()=>{ hideRotMiniChart(); });
+    hit.addEventListener('click',()=>{ rotFocusTk = (rotFocusTk === item.ticker) ? null : item.ticker; renderRotation(); });
+    g.appendChild(hit);
+
+    dataLayer.appendChild(g);
+  });
+  host.appendChild(svg);
+  rotAttachInteractions(host,view,base,margin,plotW,plotH);
+  rotRenderRail(built, cfg);
+}
+
+// Render the right-side ticker table
+function rotRenderRail(built, cfg){
+  const list = document.getElementById('rotRailList');
+  const titleEl = document.getElementById('rotRailTitle');
+  const sortEl = document.getElementById('rotRailSort');
+  if (!list) return;
+  if (titleEl) titleEl.textContent = (cfg && cfg.label) ? `All ${cfg.label}` : 'All';
+  // Compute rows (each tail's last point + velocity + quad + heading)
+  const rows = (built || []).map(s => {
+    const last = s.tail[s.tail.length - 1];
+    const v = rotVelocity(s.tail);
+    const q = rotQuadOf(last.x, last.y);
+    const h = rotHeadingScore(s.tail);          // signed; positive = NE-bound (toward LEADING)
+    const arr = rotHeadingArrow(s.tail);        // { arrow, color }
+    const rev = rotReversalScore(s.tail);       // signed; positive = pivoting toward LEADING
+    return { item: s.item, last, v, q, h, arr, rev };
+  });
+  if (rotSortBy === 'heading')       rows.sort((a,b) => b.h - a.h);   // NE-bound first
+  else if (rotSortBy === 'velocity') rows.sort((a,b) => b.v - a.v);
+  else if (rotSortBy === 'ratio')    rows.sort((a,b) => b.last.x - a.last.x);
+  else if (rotSortBy === 'momentum') rows.sort((a,b) => b.last.y - a.last.y);
+  else if (rotSortBy === 'reversal') rows.sort((a,b) => b.rev - a.rev); // bullish turns first
+  // Cache sorted ticker order for keyboard navigation
+  rotRailOrder = rows.map(r => r.item.ticker);
+  list.innerHTML = '';
+  rows.forEach(r => {
+    const info = ROT_QUAD_INFO[r.q] || ROT_QUAD_INFO.improving;
+    const row = document.createElement('div');
+    row.dataset.tk = r.item.ticker;
+    row.className = 'rot-rail-row' + (rotFocusTk === r.item.ticker ? ' focused' : '');
+    const headingDesc = r.h > 0.05 ? 'heading toward LEADING'
+                      : r.h < -0.05 ? 'heading toward LAGGING'
+                      : 'sideways';
+    row.title = `${r.item.ticker} — ${r.item.name}\nRS-Ratio ${r.last.x.toFixed(2)}\nRS-Mom   ${r.last.y.toFixed(2)}\nVelocity ${r.v.toFixed(2)}/wk · ${info.label}\nHeading  ${r.h>=0?'+':''}${r.h.toFixed(2)} (${headingDesc})\nReversal ${r.rev>=0?'+':''}${r.rev.toFixed(2)} (${r.rev>0.05?'turning toward LEADING':r.rev<-0.05?'turning away from LEADING':'straight'})`;
+    const velColor = r.v > 0.40 ? '#a5e077' : r.v > 0.20 ? '#facc15' : '#b1bcc8';
+    row.innerHTML = `
+      <span class="rot-rail-dot" style="background:${r.item.color}"></span>
+      <div class="rot-rail-id">
+        <span class="rot-rail-tk">${r.item.ticker}</span>
+        <span class="rot-rail-name">${r.item.name||''}</span>
+      </div>
+      <span class="rot-rail-quad" style="background:${rotHexToRgba(info.hex,.18)};color:${info.hex}">${info.short}</span>
+      <span class="rot-rail-arrow" style="color:${r.arr.color}">${r.arr.arrow}</span>
+      <span class="rot-rail-vel" style="color:${velColor}">${r.v.toFixed(2)}</span>
+    `;
+    row.onclick = () => {
+      rotFocusTk = (rotFocusTk === r.item.ticker) ? null : r.item.ticker;
+      renderRotation();
+    };
+    list.appendChild(row);
+  });
+  if (sortEl) {
+    const labelMap = { heading:'Heading ↗', velocity:'Velocity', ratio:'RS-Ratio', momentum:'Momentum', reversal:'Reversal ↕' };
+    sortEl.textContent = `by ${labelMap[rotSortBy]||'Velocity'} ↓`;
+    sortEl.onclick = () => {
+      const order = ['heading', 'velocity', 'ratio', 'momentum', 'reversal'];
+      const i = order.indexOf(rotSortBy);
+      rotSortBy = order[(i + 1) % order.length];
+      try{ localStorage.setItem('gekko_rot_sort_v1', rotSortBy); }catch(_e){}
+      renderRotation();
+    };
+  }
+}
+window.addEventListener('message',function(evt){
+  const data=evt&&evt.data;
+  if(!data||data.type!=='rotation-mode'||!data.mode) return;
+  rotSetMode(data.mode);
+});
+// Keyboard navigation for the rail (Up/Down/Home/End)
+function rotBindKeyHandlers(){
+  if (rotKeyBound) return;
+  rotKeyBound = 1;
+  function onKey(evt){
+    // Don't hijack typing in form fields
+    const tag = (evt.target && evt.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (evt.target && evt.target.isContentEditable)) return;
+    if (!rotRailOrder.length) return;
+    const key = evt.key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Home' && key !== 'End') return;
+    evt.preventDefault();
+    let idx = rotFocusTk ? rotRailOrder.indexOf(rotFocusTk) : -1;
+    if (key === 'ArrowDown') idx = (idx < 0) ? 0 : Math.min(rotRailOrder.length - 1, idx + 1);
+    else if (key === 'ArrowUp') idx = (idx < 0) ? rotRailOrder.length - 1 : Math.max(0, idx - 1);
+    else if (key === 'Home') idx = 0;
+    else if (key === 'End') idx = rotRailOrder.length - 1;
+    rotFocusTk = rotRailOrder[idx];
+    renderRotation();
+    // Scroll focused row into view (called after re-render so the new row exists)
+    requestAnimationFrame(() => {
+      const list = document.getElementById('rotRailList');
+      if (!list) return;
+      const row = list.querySelector('.rot-rail-row[data-tk="' + CSS.escape(rotFocusTk) + '"]');
+      if (row && row.scrollIntoView) row.scrollIntoView({ block:'nearest', inline:'nearest' });
+    });
+  }
+  window.addEventListener('keydown', onKey);
+}
+window.addEventListener('load',function(){
+  rotBindPanHandlers();
+  rotBindKeyHandlers();
+  fetch('/api/rotation')
+    .then(r=>r.ok?r.json():{})
+    .then(data=>{
+      Object.assign(ROTATION_DATA, data || {});
+      rotPopulateThemesView();
+      renderRotation();
+    })
+    .catch(()=>{renderRotation();});
+});
+window.addEventListener('resize',rotQueueRender);
+
+// --- WATCHLIST PANEL ---
+let WATCHLISTS = [];
+let ACTIVE_WATCHLIST = 0;
+const WATCHLIST_KEY = 'gekko_watchlists_v1';
+
+function loadWatchlists() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) {
+        WATCHLISTS = arr;
+        ACTIVE_WATCHLIST = Math.min(ACTIVE_WATCHLIST, WATCHLISTS.length-1);
+      }
+    }
+  } catch (e) {}
+  if (!WATCHLISTS.length) {
+    WATCHLISTS = [{ name: 'Default', symbols: ['AAPL','MSFT','GOOG','AMZN','TSLA'] }];
+    ACTIVE_WATCHLIST = 0;
+  }
+}
+function saveWatchlists() {
+  try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(WATCHLISTS)); } catch (e) {}
+  try {
+    fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({[WATCHLIST_KEY]:{watchlists:WATCHLISTS,active:ACTIVE_WATCHLIST}})
+    }).catch(()=>{});
+  } catch(_e) {}
+}
+function renderWatchlist() {
+  const wl = WATCHLISTS[ACTIVE_WATCHLIST] || { symbols: [] };
+  const list = document.getElementById('watchlistList');
+  if (!list) return;
+  list.innerHTML = '';
+  const showPrice = document.getElementById('wlShowPrice')?.checked;
+  const showPct = document.getElementById('wlShowPct')?.checked;
+  const showDelta = document.getElementById('wlShowDelta')?.checked;
+  const candleData = getCandleData();
+  wl.symbols.forEach(sym => {
+    const row = document.createElement('div');
+    row.className = 'watchlist-row';
+    row.onclick = () => goChart(sym);
+    row.title = sym;
+    const symEl = document.createElement('span');
+    symEl.className = 'watchlist-symbol';
+    symEl.textContent = sym;
+    row.appendChild(symEl);
+    const bars = candleData[sym];
+    let price = '', pct = '', delta = '';
+    if (bars && bars.length) {
+      const last = bars[bars.length-1];
+      const prev = bars.length>1 ? bars[bars.length-2] : null;
+      price = last.c != null ? '$'+Number(last.c).toFixed(2) : '';
+      if (prev && last.c != null && prev.c != null) {
+        const d = last.c - prev.c;
+        delta = (d>=0?'+':'') + d.toFixed(2);
+        pct = prev.c!==0 ? ((d/prev.c)*100).toFixed(2)+'%' : '';
+      }
+    }
+    if (showPrice) { const el = document.createElement('span'); el.className='watchlist-price'; el.textContent=price; row.appendChild(el); }
+    if (showPct) { const el = document.createElement('span'); el.className='watchlist-pct'; el.textContent=pct; row.appendChild(el); }
+    if (showDelta) { const el = document.createElement('span'); el.className='watchlist-delta'; el.textContent=delta; row.appendChild(el); }
+    list.appendChild(row);
+  });
+  // Dropdown
+  const dd = document.getElementById('watchlistDropdown');
+  if (dd) {
+    dd.innerHTML = WATCHLISTS.map((w,i)=>`<option value="${i}"${i===ACTIVE_WATCHLIST?' selected':''}>${w.name}</option>`).join('');
+    dd.onchange = e => { ACTIVE_WATCHLIST = Number(e.target.value)||0; renderWatchlist(); };
+  }
+}
+function toggleWatchlistPanel() {
+  document.body.classList.toggle('watchlist-open');
+}
+function addWatchlist() {
+  const name = prompt('New watchlist name?');
+  if (!name) return;
+  WATCHLISTS.push({ name, symbols: [] });
+  ACTIVE_WATCHLIST = WATCHLISTS.length-1;
+  saveWatchlists();
+  renderWatchlist();
+}
+function editWatchlist() {
+  const wl = WATCHLISTS[ACTIVE_WATCHLIST];
+  if (!wl) return;
+  const input = prompt('Edit symbols (comma separated):', wl.symbols.join(','));
+  if (input==null) return;
+  wl.symbols = input.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
+  saveWatchlists();
+  renderWatchlist();
+}
+function deleteWatchlist() {
+  if (WATCHLISTS.length<=1) return alert('Cannot delete last watchlist.');
+  if (!confirm('Delete this watchlist?')) return;
+  WATCHLISTS.splice(ACTIVE_WATCHLIST,1);
+  ACTIVE_WATCHLIST = Math.max(0,ACTIVE_WATCHLIST-1);
+  saveWatchlists();
+  renderWatchlist();
+}
+window.addEventListener('DOMContentLoaded',()=>{
+  loadWatchlists();
+  renderWatchlist();
+});
+
+// ── TradingView mini chart popup on rotation rail row hover ──────────────────
+const rotMiniPopEl = document.createElement('div');
+rotMiniPopEl.className = 'rot-mini-popup';
+document.body.appendChild(rotMiniPopEl);
+let _rotMiniTicker = '';
+
+function _rotMiniPosition(e){
+  const pad = 12;
+  const mX = Number(e.clientX)||0, mY = Number(e.clientY)||0;
+  const w = rotMiniPopEl.offsetWidth||320, h = rotMiniPopEl.offsetHeight||190;
+  const sW = window.innerWidth||1200, sH = window.innerHeight||800;
+  let left = mX + 16, top = mY + 16;
+  if(left + w > sW - pad) left = mX - w - 16;
+  if(top  + h > sH - pad) top  = mY - h - 16;
+  left = Math.max(pad, left); top = Math.max(pad, top);
+  rotMiniPopEl.style.left = left + 'px';
+  rotMiniPopEl.style.top  = top  + 'px';
+}
+// showRotMiniChart(ticker, e)              — rail rows (no stats panel)
+// showRotMiniChart(ticker, item, point, e) — chart bubbles (stats panel shown)
+function showRotMiniChart(ticker, itemOrEvt, point, e){
+  // Detect 2-arg form: showRotMiniChart(ticker, e)
+  const isEvent = v => v && (v.clientX != null);
+  let item = null, evt = e;
+  if(isEvent(itemOrEvt)){ evt = itemOrEvt; item = null; }
+  else { item = itemOrEvt || null; evt = e; }
+
+  if(_rotMiniTicker === ticker && rotMiniPopEl.classList.contains('show')){
+    _rotMiniPosition(evt); return;
+  }
+  _rotMiniTicker = ticker;
+  rotMiniPopEl.innerHTML = '';
+
+  // Chart area
+  const chartArea = document.createElement('div');
+  chartArea.className = 'rot-mini-chart-area';
+  const mc = document.createElement('tv-mini-chart');
+  mc.setAttribute('symbol', ticker);
+  mc.setAttribute('time-frame', '7D');
+  mc.setAttribute('line-chart-type', 'Baseline');
+  mc.setAttribute('show-time-scale', '');
+  mc.setAttribute('theme', 'dark');
+  /* Height > container so overflow:hidden clips the "price by TradingView" footer */
+  mc.style.cssText = 'width:100%;height:220px;display:block;margin-top:-2px;';
+  chartArea.appendChild(mc);
+  rotMiniPopEl.appendChild(chartArea);
+
+  // Stats panel — only when item + point are provided (bubble hover)
+  if(item && point){
+    const quad = point.x>=100?(point.y>=100?'Leading':'Weakening'):(point.y>=100?'Improving':'Lagging');
+    const qc   = point.x>=100?(point.y>=100?'#4ade80':'#facc15'):(point.y>=100?'#60a5fa':'#f87171');
+    const chg  = ROTATION_DATA._chg1d && ROTATION_DATA._chg1d[ticker];
+    const chgHtml = chg != null
+      ? `<span style="color:${chg>=0?'#4ade80':'#f87171'}">${chg>=0?'+':''}${chg.toFixed(2)}%</span>`
+      : '';
+    const info = document.createElement('div');
+    info.className = 'rot-mini-info';
+    info.innerHTML = `
+      <div class="rot-mini-info-row">
+        <span class="rot-mini-info-label">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${item.color};margin-right:5px;vertical-align:middle"></span>
+          ${item.ticker} <span style="color:#94a3b8">(${item.name})</span>
+        </span>
+        <span>${chgHtml}</span>
+      </div>
+      <div class="rot-mini-info-row">
+        <span class="rot-mini-info-label">RS-Ratio</span>
+        <span class="rot-mini-info-val">${point.x.toFixed(2)}</span>
+      </div>
+      <div class="rot-mini-info-row">
+        <span class="rot-mini-info-label">RS-Momentum</span>
+        <span class="rot-mini-info-val">${point.y.toFixed(2)}</span>
+      </div>
+      <div class="rot-mini-info-row">
+        <span class="rot-mini-info-label">Quadrant</span>
+        <span style="color:${qc};font-weight:600">${quad}</span>
+      </div>`;
+    rotMiniPopEl.appendChild(info);
+  }
+
+  rotMiniPopEl.classList.add('show');
+  _rotMiniPosition(evt);
+}
+function hideRotMiniChart(){
+  _rotMiniTicker = '';
+  rotMiniPopEl.classList.remove('show');
+  rotMiniPopEl.innerHTML = '';
+}
+document.addEventListener('mouseover', e => {
+  const el = e.target && e.target.closest ? e.target.closest('.rot-rail-row[data-tk]') : null;
+  if(!el) return;
+  const ticker = String(el.dataset.tk||'').trim().toUpperCase();
+  if(!ticker) return;
+  showRotMiniChart(ticker, e);
+});
+document.addEventListener('mouseout', e => {
+  const el = e.target && e.target.closest ? e.target.closest('.rot-rail-row[data-tk]') : null;
+  if(!el) return;
+  const to = e.relatedTarget;
+  if(to && to.closest && to.closest('.rot-rail-row[data-tk]')) return;
+  hideRotMiniChart();
+});
+document.addEventListener('mousemove', e => {
+  if(!rotMiniPopEl.classList.contains('show')) return;
+  const el = e.target && e.target.closest ? e.target.closest('.rot-rail-row[data-tk]') : null;
+  if(el) _rotMiniPosition(e);
+});
+</script>
+</div>
+</body>
+</html>
