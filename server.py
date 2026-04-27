@@ -23,8 +23,8 @@ from flask import Flask, Response, abort, make_response, request, send_file
 # ---------------------------------------------------------------------------
 # CONFIG — hardcoded, no .env needed
 # ---------------------------------------------------------------------------
-SUPABASE_URL = "https://kztjaygndfebxrpaiowt.supabase.co/rest/v1"
-SUPABASE_KEY = "sb_publishable_07Cquoeqt4a63kFjMfb_Yg_EsFcoDX0"  # public key
+SUPABASE_URL = "ADD_THE_URL_HERE"
+SUPABASE_KEY = "ADD_YOUR_KEY_HERE"  # public key
 SUPA_HDRS = {
     "apikey":        SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
