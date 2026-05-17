@@ -65,6 +65,7 @@ def build_rotation_html(rotation_json, rotation_views_json):
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rotation</title>
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-mini-chart.js"></script>
 <style>
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
@@ -212,9 +213,17 @@ body {
 .rot-body {
   flex: 1;
   min-height: 0;
-  padding: 10px 12px 12px;
+  padding: 0;
   position: relative;
   display: flex;
+  gap: 10px;
+}
+
+.rot-stage-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .rot-stage {
@@ -224,20 +233,21 @@ body {
   background:
     radial-gradient(circle at 50% 42%, rgba(255,255,255,.03), transparent 54%),
     linear-gradient(180deg, rgba(14,22,34,.98), rgba(6,9,13,.98));
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 18px;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 18px 38px rgba(0,0,0,.34);
+  box-shadow: none;
 }
 
 .rot-chart {
   position: absolute;
   inset: 0;
-  cursor: default;
+  cursor: grab;
   background:
     radial-gradient(circle at 50% 36%, rgba(255,255,255,.02), transparent 48%),
     linear-gradient(180deg, #08111b 0%, #05090f 100%);
 }
+.rot-chart.dragging { cursor: grabbing; }
 
 .rot-svg {
   display: block;
@@ -331,27 +341,391 @@ body {
 .rot-tail-dot {
   stroke: none;
 }
+
+/* ---- Trail polish ---- */
+.rot-tail-glow {
+  filter: blur(0.4px);
+}
+.rot-tail-seg {
+  stroke-linejoin: round;
+  shape-rendering: geometricPrecision;
+}
+.rot-velocity-arrow {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  pointer-events: none;
+}
+.rot-head-ring {
+  fill: none;
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+.rot-head-pulse {
+  fill: none;
+  stroke-width: 1.4;
+  pointer-events: none;
+  opacity: 0;
+  animation: rotPulse 2.4s ease-out infinite;
+}
+@keyframes rotPulse {
+  0%   { r: 8;  opacity: .65; }
+  100% { r: 24; opacity: 0; }
+}
+.rot-dim {
+  opacity: 0.10;
+  transition: opacity .18s;
+}
+.rot-focus {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* ---- Side rail (ticker table) ---- */
+.rot-rail {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,.02), transparent 40%),
+    linear-gradient(180deg, rgba(14,22,34,.92), rgba(6,9,13,.92));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 12px 28px rgba(0,0,0,.30);
+  overflow: hidden;
+}
+.rot-rail-head {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.rot-rail-title { color: var(--dim); white-space: nowrap; }
+.rot-rail-sort { white-space: nowrap; }
+.rot-rail-sort {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid transparent;
+  transition: all .12s;
+  user-select: none;
+}
+.rot-rail-sort:hover { color: var(--text); background: rgba(255,255,255,.08); border-color: var(--border-hover); }
+.rot-rail-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+.rot-rail-list::-webkit-scrollbar { width: 6px; }
+.rot-rail-list::-webkit-scrollbar-track { background: transparent; }
+.rot-rail-list::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+.rot-rail-list::-webkit-scrollbar-thumb:hover { background: #333; }
+
+.rot-rail-row {
+  display: grid;
+  /* dot · id (ticker+name) · badge · arrow · velocity */
+  grid-template-columns: 10px minmax(0, 1fr) auto 14px auto;
+  gap: 5px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background .12s, box-shadow .12s;
+}
+/* Directional heading arrow next to velocity (NE = heading toward LEADING) */
+.rot-rail-arrow {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  width: 14px;
+  user-select: none;
+}
+.rot-rail-row:hover { background: rgba(255,255,255,.03); }
+.rot-rail-row.focused {
+  background: rgba(67,162,72,.10);
+  box-shadow: inset 2px 0 0 #43a248;
+}
+.rot-rail-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rot-rail-id {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.rot-rail-tk {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+.rot-rail-name {
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rot-rail-quad {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 3px;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  line-height: 1;
+}
+.rot-rail-vel {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 36px;
+}
+@media (max-width: 720px) {
+  .rot-rail { display: none; }
+}
+
+/* TradingView mini chart popup on rail row hover */
+.rot-mini-popup {
+  position: fixed; left: 0; top: 0; z-index: 2050;
+  display: none; width: 320px;
+  background: #0f0f0f; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.62); overflow: hidden;
+  pointer-events: none; flex-direction: column;
+}
+.rot-mini-popup.show { display: flex; }
+.rot-mini-chart-area { height: 190px; overflow: hidden; flex-shrink: 0; }
+.rot-mini-info {
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.rot-mini-hdr {
+  display: flex; align-items: center; gap: 7px;
+}
+.rot-mini-hdr-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.rot-mini-hdr-tk { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#e2e8f0; letter-spacing:.02em; }
+.rot-mini-hdr-name { font-family:var(--sans); font-size:11px; color:#667383; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rot-mini-hdr-chg { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; flex-shrink:0; }
+.rot-mini-quad-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:.06em;
+  padding: 3px 10px; border-radius: 6px;
+  border: 1px solid currentColor; opacity:.9;
+  align-self: flex-start;
+}
+.rot-mini-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
+}
+.rot-mini-cell { display:flex; flex-direction:column; gap:1px; }
+.rot-mini-cell-label { font-family:var(--sans); font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:#4a5568; }
+.rot-mini-cell-val { font-family:'JetBrains Mono',monospace; font-size:11px; color:#c8d6e5; }
 </style>
 </head>
 <body>
 <div class="rot-shell">
   <div class="rot-body">
-    <div class="rot-empty" id="rotEmpty">Rotation data unavailable.</div>
-    <div class="rot-stage">
-      <div class="rot-chart" id="rotationChart"></div>
-      <div class="rot-tip" id="rotTip"></div>
+    <div class="rot-stage-col">
+      <div class="rot-empty" id="rotEmpty">Rotation data unavailable.</div>
+      <div class="rot-stage">
+        <div class="rot-chart" id="rotationChart"></div>
+        <div class="rot-tip" id="rotTip"></div>
+      </div>
     </div>
+    <aside class="rot-rail" id="rotRail">
+      <div class="rot-rail-head">
+        <span class="rot-rail-title" id="rotRailTitle">Sectors</span>
+        <span class="rot-rail-sort" id="rotRailSort" title="Click to change sort">by Velocity ↓</span>
+      </div>
+      <div class="rot-rail-list" id="rotRailList"></div>
+    </aside>
   </div>
 </div>
 <script>
 const ROTATION_DATA = {};
-const ROTATION_VIEWS = {"sectors":{"label":"Sectors","benchmark":"SHV","tickers":[{"ticker":"XLK","name":"Technology","color":"#00AAFF"},{"ticker":"XLF","name":"Financials","color":"#FF6600"},{"ticker":"XLV","name":"Healthcare","color":"#FF3366"},{"ticker":"XLY","name":"Cons. Disc.","color":"#FFAA00"},{"ticker":"XLI","name":"Industrials","color":"#AAAACC"},{"ticker":"XLC","name":"Comm. Svcs","color":"#CC44FF"},{"ticker":"XLE","name":"Energy","color":"#FF4400"},{"ticker":"XLB","name":"Materials","color":"#BB8866"},{"ticker":"XLP","name":"Cons. Staples","color":"#33CC66"},{"ticker":"XLRE","name":"Real Estate","color":"#00CCAA"},{"ticker":"XLU","name":"Utilities","color":"#8855DD"}]},"crossAsset":{"label":"Cross-Asset","benchmark":"SHV","tickers":[{"ticker":"SPY","name":"S&P 500","color":"#EAEAEA"},{"ticker":"DIA","name":"Dow Jones","color":"#00CCAA"},{"ticker":"QQQ","name":"Nasdaq 100","color":"#00AAFF"},{"ticker":"IWM","name":"Small Caps","color":"#FF6600"},{"ticker":"MDY","name":"Mid Caps","color":"#AADDFF"},{"ticker":"VEU","name":"Intl Stocks","color":"#33CC66"},{"ticker":"TLT","name":"20Y+ Bonds","color":"#AAAACC"},{"ticker":"HYG","name":"High Yield","color":"#CC44FF"},{"ticker":"GLD","name":"Gold","color":"#FFD700"},{"ticker":"SLV","name":"Silver","color":"#C0C0C0"},{"ticker":"USO","name":"Crude Oil","color":"#FF4400"},{"ticker":"CPER","name":"Copper","color":"#BB8866"},{"ticker":"IBIT","name":"Bitcoin","color":"#FF9900"}]}};
+const ROTATION_VIEWS = {"sectors":{"label":"Sectors","benchmark":"SHV","tickers":[{"ticker":"XLK","name":"Technology","color":"#00AAFF"},{"ticker":"XLF","name":"Financials","color":"#FF6600"},{"ticker":"XLV","name":"Healthcare","color":"#FF3366"},{"ticker":"XLY","name":"Cons. Disc.","color":"#FFAA00"},{"ticker":"XLI","name":"Industrials","color":"#AAAACC"},{"ticker":"XLC","name":"Comm. Svcs","color":"#CC44FF"},{"ticker":"XLE","name":"Energy","color":"#FF4400"},{"ticker":"XLB","name":"Materials","color":"#BB8866"},{"ticker":"XLP","name":"Cons. Staples","color":"#33CC66"},{"ticker":"XLRE","name":"Real Estate","color":"#00CCAA"},{"ticker":"XLU","name":"Utilities","color":"#8855DD"}]},"crossAsset":{"label":"Cross-Asset","benchmark":"SHV","tickers":[{"ticker":"SPY","name":"S&P 500","color":"#EAEAEA"},{"ticker":"DIA","name":"Dow Jones","color":"#00CCAA"},{"ticker":"QQQ","name":"Nasdaq 100","color":"#00AAFF"},{"ticker":"IWM","name":"Small Caps","color":"#FF6600"},{"ticker":"MDY","name":"Mid Caps","color":"#AADDFF"},{"ticker":"VEU","name":"Intl Stocks","color":"#33CC66"},{"ticker":"TLT","name":"20Y+ Bonds","color":"#AAAACC"},{"ticker":"HYG","name":"High Yield","color":"#CC44FF"},{"ticker":"GLD","name":"Gold","color":"#FFD700"},{"ticker":"SLV","name":"Silver","color":"#C0C0C0"},{"ticker":"USO","name":"Crude Oil","color":"#FF4400"},{"ticker":"CPER","name":"Copper","color":"#BB8866"},{"ticker":"IBIT","name":"Bitcoin","color":"#FF9900"}]},"themes":{"label":"Themes","benchmark":"SPY","tickers":[]}};
+
+// Stable color from a ticker string (for themes — many tickers, no curated palette)
+function rotThemeColor(ticker){
+  let h = 0;
+  const s = String(ticker || '');
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  return 'hsl(' + hue + ',62%,62%)';
+}
+// Build the 'themes' view ticker list from server-provided _themesMeta
+function rotPopulateThemesView(){
+  const meta = ROTATION_DATA && ROTATION_DATA._themesMeta;
+  if (!Array.isArray(meta) || !meta.length) return;
+  const themesView = ROTATION_VIEWS.themes;
+  if (!themesView) return;
+  themesView.tickers = meta.map(m => ({
+    ticker: m.ticker,
+    name: m.name || m.ticker,
+    color: rotThemeColor(m.ticker),
+  }));
+}
 const SVG_NS='http://www.w3.org/2000/svg';
 let rotMode='sectors';
 let rotRenderTimer=0;
 const rotViewByMode={};
 let rotDragState=null;
 let rotPanBound=0;
+// Focus + sort state for the side rail
+let rotFocusTk=null;
+let _rotClickTimer=null;
+let _rotLastClickTk='';
+let _rotLastClickT=0;
+function _rotHandleClick(ticker){
+  const now=Date.now();
+  if(ticker===_rotLastClickTk && now-_rotLastClickT<500){
+    // Double-click: cancel pending single-click, open chart
+    clearTimeout(_rotClickTimer);
+    _rotClickTimer=null;
+    _rotLastClickTk='';
+    try{ window.parent.postMessage({type:'rotation-open-chart',ticker},'*'); }catch(_e){}
+  } else {
+    // First click: schedule focus highlight
+    clearTimeout(_rotClickTimer);
+    _rotLastClickTk=ticker;
+    _rotLastClickT=now;
+    _rotClickTimer=setTimeout(()=>{
+      _rotClickTimer=null;
+      rotFocusTk=(rotFocusTk===ticker)?null:ticker;
+      renderRotation();
+    },250);
+  }
+}
+const _ROT_SORT_VALID=['heading','velocity','ratio','momentum','reversal','quadrant'];
+let rotSortBy=(()=>{ try{ const s=localStorage.getItem('gekko_rot_sort_v1'); return _ROT_SORT_VALID.includes(s)?s:'heading'; }catch(_e){ return 'heading'; } })();
+let rotRailOrder=[]; // current sorted ticker order in the rail (for keyboard nav)
+let rotKeyBound=0;
+const ROT_QUAD_INFO = {
+  leading:   { label:'LEADING',   short:'LEAD', hex:'#43a248' },
+  improving: { label:'IMPROVING', short:'IMPR', hex:'#4a78bc' },
+  weakening: { label:'WEAKENING', short:'WEAK', hex:'#ab8d28' },
+  lagging:   { label:'LAGGING',   short:'LAGG', hex:'#b14f4f' },
+};
+function rotQuadOf(x,y){
+  if (x>=100 && y>=100) return 'leading';
+  if (x>=100 && y< 100) return 'weakening';
+  if (x< 100 && y>=100) return 'improving';
+  return 'lagging';
+}
+// Average per-step motion across the last 4 weeks of the tail
+function rotVelocity(tail){
+  if (!tail || tail.length < 2) return 0;
+  const end = tail.length;
+  const start = Math.max(1, end - 4);
+  let sum = 0, n = 0;
+  for (let i = start; i < end; i++){
+    const a = tail[i-1], b = tail[i];
+    if (!a || !b) continue;
+    sum += Math.hypot(b.x - a.x, b.y - a.y);
+    n++;
+  }
+  return n ? sum / n : 0;
+}
+function rotVelocityVec(tail){
+  if (!tail || tail.length < 2) return { dx:0, dy:0 };
+  const end = tail.length;
+  const a = tail[Math.max(0, end-3)], b = tail[end-1];
+  return { dx: b.x - a.x, dy: b.y - a.y };
+}
+// "Heading toward LEADING" score — alignment-dominant.
+// Formula: √magnitude × cos⁵(angle − 45°)
+//   • Alignment is *decisive* (5th power steeply penalises off-axis motion)
+//   • Magnitude contributes diminishing returns (sqrt, not linear)
+//     so a 4x-faster mover only doubles the score
+//   • Net effect: a clean NE arrow always outranks a flat E arrow
+//     unless the E arrow is ~32x faster (basically never)
+//
+//   ↗ NE perfect   → factor  1.000  (max positive)
+//   ↑ N or → E     → factor  0.177  (one axis only — half-credit alignment, then cubed twice more)
+//   ↖ NW or ↘ SE   → factor  0      (orthogonal to NE)
+//   ← W or ↓ S     → factor -0.177
+//   ↙ SW perfect   → factor -1.000  (max negative)
+function rotHeadingScore(tail){
+  const v = rotVelocityVec(tail);
+  const mag = Math.hypot(v.dx, v.dy);
+  if (mag < 0.04) return 0;                              // basically stationary
+  const ang = Math.atan2(v.dy, v.dx);                    // 0=E, π/2=N, π/4=NE
+  const align = Math.cos(ang - Math.PI / 4);             // -1..+1, peak at NE
+  const align5 = align * align * align * align * align;  // 5th power: sign-preserving
+  return Math.sqrt(mag) * align5;                        // sqrt(mag) × align^5
+}
+// Reversal score — measures how much the heading has recently changed toward/away from LEADING.
+//   Compares the "old" direction (tail[n-5]→tail[n-3]) vs the "new" direction (tail[n-3]→tail[n-1]).
+//   Positive → pivoted more toward NE (bullish turn)
+//   Negative → pivoted away from NE (bearish turn)
+//   ≈ 0     → travelling in a straight line (no reversal)
+//   Weighted by √min(oldMag, newMag) so both legs need real movement to score high.
+function rotReversalScore(tail){
+  if (!tail || tail.length < 5) return 0;
+  const n = tail.length;
+  // Old leg: ~4 periods ago → ~2 periods ago
+  const oA = tail[Math.max(0, n - 5)], oB = tail[Math.max(0, n - 3)];
+  const oDx = oB.x - oA.x, oDy = oB.y - oA.y;
+  const oMag = Math.hypot(oDx, oDy);
+  // New leg: ~2 periods ago → now  (same window as rotVelocityVec)
+  const nA = tail[Math.max(0, n - 3)], nB = tail[n - 1];
+  const nDx = nB.x - nA.x, nDy = nB.y - nA.y;
+  const nMag = Math.hypot(nDx, nDy);
+  if (oMag < 0.04 || nMag < 0.04) return 0;            // too stationary to judge
+  // NE-alignment using same cos^5 formula as rotHeadingScore
+  function neAlign(dx, dy){
+    const a = Math.cos(Math.atan2(dy, dx) - Math.PI / 4);
+    return a * a * a * a * a;                            // sign-preserving 5th power
+  }
+  return (neAlign(nDx, nDy) - neAlign(oDx, oDy)) * Math.sqrt(Math.min(oMag, nMag));
+}
+// 8-way arrow icon for the heading direction. Returns { arrow, color }.
+//   ↗ NE (heading toward LEADING)  — green
+//   ↖ NW (heading toward IMPROVING) — blue
+//   ↘ SE (heading toward WEAKENING) — amber
+//   ↙ SW (heading toward LAGGING)  — red
+//   compass cardinal arrows for in-between cases
+function rotHeadingArrow(tail){
+  const v = rotVelocityVec(tail);
+  const mag = Math.hypot(v.dx, v.dy);
+  if (mag < 0.04) return { arrow:'·', color:'#667383' };  // basically stationary
+  // Angle in degrees (0° = +X "east", 90° = +Y "north"). Note: in RRG, +Y is up (momentum increasing).
+  let deg = Math.atan2(v.dy, v.dx) * 180 / Math.PI;
+  if (deg < 0) deg += 360;
+  // 8-sector compass starting at 0° = E, rotating CCW.
+  const sectors = [
+    { lo:   0, hi:  22.5, arrow:'→', color:'#94a3b8' }, // E
+    { lo:  22.5, hi:  67.5, arrow:'↗', color:'#a5e077' }, // NE → toward LEADING
+    { lo:  67.5, hi: 112.5, arrow:'↑', color:'#86efac' }, // N
+    { lo: 112.5, hi: 157.5, arrow:'↖', color:'#7DCFFF' }, // NW → toward IMPROVING
+    { lo: 157.5, hi: 202.5, arrow:'←', color:'#94a3b8' }, // W
+    { lo: 202.5, hi: 247.5, arrow:'↙', color:'#f87171' }, // SW → toward LAGGING
+    { lo: 247.5, hi: 292.5, arrow:'↓', color:'#fca5a5' }, // S
+    { lo: 292.5, hi: 337.5, arrow:'↘', color:'#facc15' }, // SE → toward WEAKENING
+    { lo: 337.5, hi: 360.0, arrow:'→', color:'#94a3b8' }, // E (wrap)
+  ];
+  for (const s of sectors){ if (deg >= s.lo && deg < s.hi) return { arrow: s.arrow, color: s.color }; }
+  return { arrow:'·', color:'#667383' };
+}
 
 function rotClamp(v,min,max){
   const n=Number(v);
@@ -508,10 +882,56 @@ function rotBuildSeries(cfg,modeData){
 }
 function rotAttachInteractions(host,view,base,margin,plotW,plotH){
   if(!host) return;
-  host.onwheel=null;
-  host.onmousedown=null;
-  host.ondblclick=null;
-  host.onmouseleave=()=>rotHideTip();
+  // Mouse wheel: zoom in/out around the cursor position
+  host.onwheel = function(evt){
+    evt.preventDefault();
+    const rect = host.getBoundingClientRect();
+    const mx = evt.clientX - rect.left;
+    const my = evt.clientY - rect.top;
+    // Convert mouse position to data coordinates (use the *current* view)
+    const xAt = view.xMin + ((mx - margin.left) / plotW) * view.xSpan;
+    const yAt = view.yMin + ((margin.top + plotH - my) / plotH) * view.ySpan;
+    const st = rotGetView(rotMode);
+    const factor = evt.deltaY < 0 ? 1.18 : 1 / 1.18;  // scroll up = zoom in
+    const newZoom = Math.max(1, Math.min(16, (st.zoom || 1) * factor));
+    if (newZoom === st.zoom) return;
+    // Recenter so the data point under the cursor stays fixed during zoom
+    st.zoom = newZoom;
+    const halfX = Math.max(0.5, (base.xSpan / 2) / newZoom);
+    const halfY = Math.max(0.5, (base.ySpan / 2) / newZoom);
+    const fx = (mx - margin.left) / plotW;        // 0..1 across the plot
+    const fy = (margin.top + plotH - my) / plotH; // 0..1 from bottom up
+    st.cx = xAt - (fx - 0.5) * (halfX * 2);
+    st.cy = yAt - (fy - 0.5) * (halfY * 2);
+    rotClampView(base, st);
+    rotQueueRender();
+  };
+  // Mouse drag: pan the view
+  host.onmousedown = function(evt){
+    if (evt.button !== 0) return;
+    const st = rotGetView(rotMode);
+    if ((st.zoom || 1) <= 1.001) return;  // no panning at full-fit zoom
+    rotDragState = {
+      mode: rotMode,
+      startX: evt.clientX,
+      startY: evt.clientY,
+      startCx: st.cx,
+      startCy: st.cy,
+      base: base,
+      viewXSpan: view.xSpan,
+      viewYSpan: view.ySpan,
+      plotW: plotW,
+      plotH: plotH,
+    };
+    host.classList.add('dragging');
+    rotHideTip();
+  };
+  // Double-click: reset zoom to full-fit
+  host.ondblclick = function(){
+    rotResetView(rotMode);
+    rotQueueRender();
+  };
+  host.onmouseleave = ()=>{ rotHideTip(); hideRotMiniChart(); }; // rotHideTip kept for any residual tip state
 }
 function renderRotation(){
   const host=document.getElementById('rotationChart');
@@ -531,7 +951,7 @@ function renderRotation(){
   const rect=host.getBoundingClientRect();
   const width=Math.max(720,Math.floor(rect.width||960));
   const height=Math.max(460,Math.floor(rect.height||560));
-  const margin={top:18,right:18,bottom:18,left:18};
+  const margin={top:0,right:0,bottom:0,left:0};
   const plotW=Math.max(200,width-margin.left-margin.right);
   const plotH=Math.max(160,height-margin.top-margin.bottom);
   let xMin=97,xMax=103,yMin=97,yMax=103;
@@ -621,39 +1041,91 @@ function renderRotation(){
   const dataLayer=rotMakeEl('g',{'clip-path':`url(#${clipId})`});
   svg.appendChild(dataLayer);
 
+  // Re-validate focus: if it's not in the current view, clear it
+  if (rotFocusTk && !built.some(s => s.item.ticker === rotFocusTk)) rotFocusTk = null;
+
+  let _focusedGroup = null;
   built.forEach(series=>{
     const tail=series.tail;
     const item=series.item;
-    const points=tail.map(p=>`${xPx(p.x)},${yPx(p.y)}`).join(' ');
-    dataLayer.appendChild(rotMakeEl('polyline',{
+    const isFocused = rotFocusTk === item.ticker;
+    const isDim = rotFocusTk && !isFocused;
+    const groupAttrs = { style: 'color:'+item.color };
+    if (isDim) groupAttrs.class = 'rot-dim';
+    else if (isFocused) groupAttrs.class = 'rot-focus';
+    const g = rotMakeEl('g', groupAttrs);
+
+    // Underglow: slightly stronger when focused, also a soft outer halo for crispness
+    const points = tail.map(p=>`${xPx(p.x)},${yPx(p.y)}`).join(' ');
+    g.appendChild(rotMakeEl('polyline',{
       points,
       class:'rot-tail-glow',
-      stroke:rotHexToRgba(item.color,0.14),
-      'stroke-width':'4.8'
+      stroke:rotHexToRgba(item.color, isFocused ? 0.34 : 0.16),
+      'stroke-width': isFocused ? '8.5' : '5.6'
     }));
-    for(let i=0;i<tail.length-1;i++){ 
+    // Per-segment fading stroke (older→newer alpha + width)
+    for(let i=0;i<tail.length-1;i++){
       const a=tail[i],b=tail[i+1];
       const fade=(i+1)/Math.max(tail.length-1,1);
-      dataLayer.appendChild(rotMakeEl('line',{
+      g.appendChild(rotMakeEl('line',{
         x1:xPx(a.x),y1:yPx(a.y),x2:xPx(b.x),y2:yPx(b.y),
         class:'rot-tail-seg',
-        stroke:rotHexToRgba(item.color,0.18+fade*0.74),
-        'stroke-width':(0.8+fade*2.9).toFixed(2)
+        stroke:rotHexToRgba(item.color, 0.20+fade*0.74),
+        'stroke-width':(0.95 + fade*(isFocused ? 3.6 : 2.8)).toFixed(2)
       }));
     }
-    for(let i=0;i<tail.length-1;i++){ 
+    // Per-point fading dots along the tail
+    for(let i=0;i<tail.length-1;i++){
       const p=tail[i];
       const fade=(i+1)/Math.max(tail.length-1,1);
-      dataLayer.appendChild(rotMakeEl('circle',{
-        cx:xPx(p.x),cy:yPx(p.y),r:(1.3+fade*1.0).toFixed(2),
+      g.appendChild(rotMakeEl('circle',{
+        cx:xPx(p.x),cy:yPx(p.y),r:(1.25 + fade*1.05).toFixed(2),
         class:'rot-tail-dot',
-        fill:rotHexToRgba(item.color,0.14+fade*0.42)
+        fill:rotHexToRgba(item.color, 0.16+fade*0.46)
       }));
     }
+    // Velocity arrow at the head (always shown — small but visible)
+    const v = rotVelocityVec(tail);
+    const vMag = Math.hypot(v.dx, v.dy);
+    if (vMag > 0.04) {
+      const last = tail[tail.length-1];
+      const lx0 = xPx(last.x), ly0 = yPx(last.y);
+      // Direction in screen space (flip Y for SVG)
+      const ux = (xPx(last.x + v.dx) - lx0);
+      const uy = (yPx(last.y + v.dy) - ly0);
+      const sm = Math.hypot(ux, uy) || 1;
+      const arrowLen = isFocused ? 28 : 22;
+      const ax = lx0 + (ux/sm) * arrowLen;
+      const ay = ly0 + (uy/sm) * arrowLen;
+      const ang = Math.atan2(ay - ly0, ax - lx0);
+      const ah = isFocused ? 8 : 6.5;
+      const ahx1 = ax - ah * Math.cos(ang - 0.42);
+      const ahy1 = ay - ah * Math.sin(ang - 0.42);
+      const ahx2 = ax - ah * Math.cos(ang + 0.42);
+      const ahy2 = ay - ah * Math.sin(ang + 0.42);
+      g.appendChild(rotMakeEl('line',{
+        x1: lx0, y1: ly0, x2: ax, y2: ay,
+        class:'rot-velocity-arrow',
+        stroke: rotHexToRgba(item.color, isFocused ? 0.95 : 0.82),
+        'stroke-width': isFocused ? 2.6 : 1.9,
+      }));
+      g.appendChild(rotMakeEl('path',{
+        d: `M${ahx1.toFixed(1)},${ahy1.toFixed(1)} L${ax.toFixed(1)},${ay.toFixed(1)} L${ahx2.toFixed(1)},${ahy2.toFixed(1)}`,
+        class:'rot-velocity-arrow',
+        stroke: rotHexToRgba(item.color, isFocused ? 0.95 : 0.82),
+        'stroke-width': isFocused ? 2.6 : 1.9,
+      }));
+    }
+    // Head dot (and pulse when focused)
     const last=tail[tail.length-1];
-    const lx=xPx(last.x),ly=yPx(last.y);
-    dataLayer.appendChild(rotMakeEl('circle',{cx:lx,cy:ly,r:8.6,fill:rotHexToRgba(item.color,0.20)}));
-    dataLayer.appendChild(rotMakeEl('circle',{cx:lx,cy:ly,r:6.9,fill:item.color,stroke:'#ffffff','stroke-width':2.1,class:'rot-last-dot'}));
+    const lx=xPx(last.x), ly=yPx(last.y);
+    if (isFocused) {
+      g.appendChild(rotMakeEl('circle',{cx:lx, cy:ly, r:8, class:'rot-head-pulse', stroke:item.color}));
+    }
+    g.appendChild(rotMakeEl('circle',{cx:lx, cy:ly, r: isFocused ? 10 : 8.6, fill: rotHexToRgba(item.color, 0.20)}));
+    g.appendChild(rotMakeEl('circle',{cx:lx, cy:ly, r: isFocused ? 8 : 6.9, fill:item.color, stroke:'#ffffff', 'stroke-width': isFocused ? 2.5 : 2.1, class:'rot-last-dot'}));
+
+    // Label
     const labelRight=last.x>=100;
     const labelUp=last.y>=100;
     const label=rotMakeEl('text',{
@@ -665,27 +1137,154 @@ function renderRotation(){
       stroke:'rgba(0,0,0,.88)'
     });
     label.textContent=item.ticker;
-    svg.appendChild(label);
-    // Large transparent hit circle centered on the dot (not the label)
+    g.appendChild(label);
+
+    // Large transparent hit circle for hover/click
     const hit=rotMakeEl('circle',{cx:lx,cy:ly,r:48,fill:'transparent',style:'cursor:pointer'});
-    hit.addEventListener('mouseenter',evt=>rotShowTip(evt,host,item,last));
-    hit.addEventListener('mousemove',evt=>rotShowTip(evt,host,item,last));
-    hit.addEventListener('mouseleave',rotHideTip);
-    svg.appendChild(hit);
+    hit.addEventListener('mouseenter',evt=>{ showRotMiniChart(item.ticker,item,last,evt); });
+    hit.addEventListener('mousemove',evt=>{ showRotMiniChart(item.ticker,item,last,evt); });
+    hit.addEventListener('mouseleave',()=>{ hideRotMiniChart(); });
+    hit.addEventListener('click',()=>{ _rotHandleClick(item.ticker); });
+    g.appendChild(hit);
+
+    if (isFocused) _focusedGroup = g;
+    else dataLayer.appendChild(g);
   });
+  if (_focusedGroup) dataLayer.appendChild(_focusedGroup);
   host.appendChild(svg);
   rotAttachInteractions(host,view,base,margin,plotW,plotH);
+  rotRenderRail(built, cfg);
+  // Broadcast quadrant summary to parent (index.html qbar)
+  if (window.parent && window.parent !== window) {
+    const raw = { leading:[], improving:[], weakening:[], lagging:[] };
+    built.forEach(s => {
+      const last = s.tail[s.tail.length - 1];
+      if (!last) return;
+      const q = rotQuadOf(last.x, last.y);
+      raw[q].push({ ticker: s.item.ticker, color: s.item.color, h: rotHeadingScore(s.tail) });
+    });
+    const buckets = {};
+    ['leading','improving','weakening','lagging'].forEach(q => {
+      const sorted = raw[q].slice().sort((a,b) => b.h - a.h);
+      const clean = sorted.map(({ticker,color})=>({ticker,color}));
+      buckets[q] = { count: sorted.length, top: clean.slice(0,5), all: clean };
+    });
+    try { window.parent.postMessage({ type:'rotation-qbar', mode:rotMode, buckets }, '*'); } catch(_e){}
+  }
+}
+
+// Render the right-side ticker table
+function rotRenderRail(built, cfg){
+  const list = document.getElementById('rotRailList');
+  const titleEl = document.getElementById('rotRailTitle');
+  const sortEl = document.getElementById('rotRailSort');
+  if (!list) return;
+  if (titleEl) titleEl.textContent = (cfg && cfg.label) ? cfg.label : '';
+  // Compute rows (each tail's last point + velocity + quad + heading)
+  const rows = (built || []).map(s => {
+    const last = s.tail[s.tail.length - 1];
+    const v = rotVelocity(s.tail);
+    const q = rotQuadOf(last.x, last.y);
+    const h = rotHeadingScore(s.tail);          // signed; positive = NE-bound (toward LEADING)
+    const arr = rotHeadingArrow(s.tail);        // { arrow, color }
+    const rev = rotReversalScore(s.tail);       // signed; positive = pivoting toward LEADING
+    return { item: s.item, last, v, q, h, arr, rev };
+  });
+  if (rotSortBy === 'heading')       rows.sort((a,b) => b.h - a.h);
+  else if (rotSortBy === 'velocity') rows.sort((a,b) => b.v - a.v);
+  else if (rotSortBy === 'ratio')    rows.sort((a,b) => b.last.x - a.last.x);
+  else if (rotSortBy === 'momentum') rows.sort((a,b) => b.last.y - a.last.y);
+  else if (rotSortBy === 'reversal') rows.sort((a,b) => b.rev - a.rev);
+  else if (rotSortBy === 'quadrant') {
+    const qOrder = { leading:0, improving:1, weakening:2, lagging:3 };
+    rows.sort((a,b) => (qOrder[a.q]??4) - (qOrder[b.q]??4) || b.h - a.h);
+  }
+  // Cache sorted ticker order for keyboard navigation
+  rotRailOrder = rows.map(r => r.item.ticker);
+  list.innerHTML = '';
+  rows.forEach(r => {
+    const info = ROT_QUAD_INFO[r.q] || ROT_QUAD_INFO.improving;
+    const row = document.createElement('div');
+    row.dataset.tk = r.item.ticker;
+    row.className = 'rot-rail-row' + (rotFocusTk === r.item.ticker ? ' focused' : '');
+    const headingDesc = r.h > 0.05 ? 'heading toward LEADING'
+                      : r.h < -0.05 ? 'heading toward LAGGING'
+                      : 'sideways';
+    row._rotStats = { item: r.item, last: r.last, v: r.v, h: r.h, rev: r.rev, q: r.q, info };
+    const velColor = r.v > 0.40 ? '#a5e077' : r.v > 0.20 ? '#facc15' : '#b1bcc8';
+    row.innerHTML = `
+      <span class="rot-rail-dot" style="background:${r.item.color}"></span>
+      <div class="rot-rail-id">
+        <span class="rot-rail-tk">${r.item.ticker}</span>
+        <span class="rot-rail-name">${r.item.name||''}</span>
+      </div>
+      <span class="rot-rail-quad" style="background:${rotHexToRgba(info.hex,.18)};color:${info.hex}">${info.short}</span>
+      <span class="rot-rail-arrow" style="color:${r.arr.color}">${r.arr.arrow}</span>
+      <span class="rot-rail-vel" style="color:${velColor}">${r.v.toFixed(2)}</span>
+    `;
+    row.onclick = () => { _rotHandleClick(r.item.ticker); };
+    list.appendChild(row);
+  });
+  if (sortEl) {
+    const labelMap = { heading:'Heading ↗', velocity:'Velocity', ratio:'RS-Ratio', momentum:'Momentum', reversal:'Reversal ↕', quadrant:'Quadrant' };
+    sortEl.textContent = `by ${labelMap[rotSortBy]||'Heading'} ↓`;
+    sortEl.onclick = () => {
+      const order = ['heading', 'velocity', 'ratio', 'momentum', 'reversal', 'quadrant'];
+      const i = order.indexOf(rotSortBy);
+      rotSortBy = order[(i + 1) % order.length];
+      try{ localStorage.setItem('gekko_rot_sort_v1', rotSortBy); }catch(_e){}
+      renderRotation();
+    };
+  }
 }
 window.addEventListener('message',function(evt){
   const data=evt&&evt.data;
-  if(!data||data.type!=='rotation-mode'||!data.mode) return;
-  rotSetMode(data.mode);
+  if(!data) return;
+  if(data.type==='rotation-mode'&&data.mode) rotSetMode(data.mode);
+  if(data.type==='rotation-focus'&&data.ticker){
+    rotFocusTk = (rotFocusTk===data.ticker) ? null : data.ticker;
+    renderRotation();
+  }
 });
+// Keyboard navigation for the rail (Up/Down/Home/End)
+function rotBindKeyHandlers(){
+  if (rotKeyBound) return;
+  rotKeyBound = 1;
+  function onKey(evt){
+    // Don't hijack typing in form fields
+    const tag = (evt.target && evt.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (evt.target && evt.target.isContentEditable)) return;
+    if (!rotRailOrder.length) return;
+    const key = evt.key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Home' && key !== 'End') return;
+    evt.preventDefault();
+    let idx = rotFocusTk ? rotRailOrder.indexOf(rotFocusTk) : -1;
+    if (key === 'ArrowDown') idx = (idx < 0) ? 0 : Math.min(rotRailOrder.length - 1, idx + 1);
+    else if (key === 'ArrowUp') idx = (idx < 0) ? rotRailOrder.length - 1 : Math.max(0, idx - 1);
+    else if (key === 'Home') idx = 0;
+    else if (key === 'End') idx = rotRailOrder.length - 1;
+    rotFocusTk = rotRailOrder[idx];
+    renderRotation();
+    // Scroll focused row into view (called after re-render so the new row exists)
+    requestAnimationFrame(() => {
+      const list = document.getElementById('rotRailList');
+      if (!list) return;
+      const row = list.querySelector('.rot-rail-row[data-tk="' + CSS.escape(rotFocusTk) + '"]');
+      if (row && row.scrollIntoView) row.scrollIntoView({ block:'nearest', inline:'nearest' });
+    });
+  }
+  window.addEventListener('keydown', onKey);
+}
 window.addEventListener('load',function(){
   rotBindPanHandlers();
+  rotBindKeyHandlers();
   fetch('/api/rotation')
     .then(r=>r.ok?r.json():{})
-    .then(data=>{Object.assign(ROTATION_DATA,data||{});renderRotation();})
+    .then(data=>{
+      Object.assign(ROTATION_DATA, data || {});
+      rotPopulateThemesView();
+      renderRotation();
+    })
     .catch(()=>{renderRotation();});
 });
 window.addEventListener('resize',rotQueueRender);
@@ -792,6 +1391,127 @@ function deleteWatchlist() {
 window.addEventListener('DOMContentLoaded',()=>{
   loadWatchlists();
   renderWatchlist();
+});
+
+// ── TradingView mini chart popup on rotation rail row hover ──────────────────
+const rotMiniPopEl = document.createElement('div');
+rotMiniPopEl.className = 'rot-mini-popup';
+document.body.appendChild(rotMiniPopEl);
+let _rotMiniTicker = '';
+
+function _rotMiniPosition(e){
+  const pad = 12;
+  const mX = Number(e.clientX)||0, mY = Number(e.clientY)||0;
+  const w = rotMiniPopEl.offsetWidth||320, h = rotMiniPopEl.offsetHeight||190;
+  const sW = window.innerWidth||1200, sH = window.innerHeight||800;
+  let left = mX + 16, top = mY + 16;
+  if(left + w > sW - pad) left = mX - w - 16;
+  if(top  + h > sH - pad) top  = mY - h - 16;
+  left = Math.max(pad, left); top = Math.max(pad, top);
+  rotMiniPopEl.style.left = left + 'px';
+  rotMiniPopEl.style.top  = top  + 'px';
+}
+// showRotMiniChart(ticker, rowStats, e)    — rail rows (full stats panel)
+// showRotMiniChart(ticker, item, point, e) — chart bubbles (stats panel shown)
+function showRotMiniChart(ticker, itemOrStats, pointOrEvt, e){
+  const isEvent = v => v && (v.clientX != null);
+  // Detect forms
+  let rowStats = null, item = null, point = null, evt = e;
+  if(isEvent(pointOrEvt)){
+    // 3-arg: (ticker, rowStats|null, e)
+    evt = pointOrEvt;
+    if(itemOrStats && itemOrStats.item) rowStats = itemOrStats;
+  } else {
+    // 4-arg: (ticker, item, point, e)
+    item = itemOrStats || null;
+    point = pointOrEvt || null;
+    evt = e;
+  }
+
+  if(_rotMiniTicker === ticker && rotMiniPopEl.classList.contains('show')){
+    _rotMiniPosition(evt); return;
+  }
+  _rotMiniTicker = ticker;
+  rotMiniPopEl.innerHTML = '';
+
+  // Chart area
+  const chartArea = document.createElement('div');
+  chartArea.className = 'rot-mini-chart-area';
+  const mc = document.createElement('tv-mini-chart');
+  mc.setAttribute('symbol', ticker);
+  mc.setAttribute('time-frame', '7D');
+  mc.setAttribute('line-chart-type', 'Baseline');
+  mc.setAttribute('show-time-scale', '');
+  mc.setAttribute('theme', 'dark');
+  mc.style.cssText = 'width:100%;height:220px;display:block;margin-top:-2px;';
+  chartArea.appendChild(mc);
+  rotMiniPopEl.appendChild(chartArea);
+
+  // Build stats from rowStats (rail) or item+point (bubble)
+  const statsItem  = rowStats ? rowStats.item  : item;
+  const statsPoint = rowStats ? rowStats.last   : point;
+  if(statsItem && statsPoint){
+    const q    = rowStats ? rowStats.q : (statsPoint.x>=100?(statsPoint.y>=100?'leading':'weakening'):(statsPoint.y>=100?'improving':'lagging'));
+    const qi   = ROT_QUAD_INFO[q] || ROT_QUAD_INFO.improving;
+    const chg  = ROTATION_DATA._chg1d && ROTATION_DATA._chg1d[ticker];
+    const chgColor = chg == null ? '' : chg >= 0 ? '#4ade80' : '#f87171';
+    const chgText  = chg == null ? '' : `${chg>=0?'+':''}${chg.toFixed(2)}%`;
+
+    let statsRows = `
+      <div class="rot-mini-cell"><span class="rot-mini-cell-label">RS-Ratio</span><span class="rot-mini-cell-val">${statsPoint.x.toFixed(2)}</span></div>
+      <div class="rot-mini-cell"><span class="rot-mini-cell-label">RS-Mom</span><span class="rot-mini-cell-val">${statsPoint.y.toFixed(2)}</span></div>`;
+    if(rowStats){
+      const headingDesc = rowStats.h > 0.05 ? 'toward LEADING' : rowStats.h < -0.05 ? 'toward LAGGING' : 'sideways';
+      const revDesc     = rowStats.rev > 0.05 ? 'toward LEADING' : rowStats.rev < -0.05 ? 'away from LEADING' : 'straight';
+      const velColor    = rowStats.v > 0.40 ? '#a5e077' : rowStats.v > 0.20 ? '#facc15' : '#b1bcc8';
+      const headColor   = rowStats.h > 0.05 ? '#a5e077' : rowStats.h < -0.05 ? '#f87171' : '#b1bcc8';
+      const revColor    = rowStats.rev > 0.05 ? '#a5e077' : rowStats.rev < -0.05 ? '#f87171' : '#b1bcc8';
+      statsRows += `
+      <div class="rot-mini-cell"><span class="rot-mini-cell-label">Velocity</span><span class="rot-mini-cell-val" style="color:${velColor}">${rowStats.v.toFixed(2)}/wk</span></div>
+      <div class="rot-mini-cell"><span class="rot-mini-cell-label">Heading</span><span class="rot-mini-cell-val" style="color:${headColor}" title="${headingDesc}">${rowStats.h>=0?'+':''}${rowStats.h.toFixed(2)}</span></div>
+      <div class="rot-mini-cell" style="grid-column:1/-1"><span class="rot-mini-cell-label">Reversal</span><span class="rot-mini-cell-val" style="color:${revColor}">${rowStats.rev>=0?'+':''}${rowStats.rev.toFixed(2)} <span style="color:#4a5568;font-size:10px">${revDesc}</span></span></div>`;
+    }
+
+    const infoEl = document.createElement('div');
+    infoEl.className = 'rot-mini-info';
+    infoEl.innerHTML = `
+      <div class="rot-mini-hdr">
+        <span class="rot-mini-hdr-dot" style="background:${statsItem.color}"></span>
+        <span class="rot-mini-hdr-tk">${statsItem.ticker}</span>
+        <span class="rot-mini-hdr-name">${statsItem.name||''}</span>
+        ${chgText ? `<span class="rot-mini-hdr-chg" style="color:${chgColor}">${chgText}</span>` : ''}
+      </div>
+      <span class="rot-mini-quad-badge" style="color:${qi.hex};border-color:${qi.hex}22;background:${rotHexToRgba(qi.hex,.10)}">${qi.label}</span>
+      <div class="rot-mini-grid">${statsRows}</div>`;
+    rotMiniPopEl.appendChild(infoEl);
+  }
+
+  rotMiniPopEl.classList.add('show');
+  _rotMiniPosition(evt);
+}
+function hideRotMiniChart(){
+  _rotMiniTicker = '';
+  rotMiniPopEl.classList.remove('show');
+  rotMiniPopEl.innerHTML = '';
+}
+document.addEventListener('mouseover', e => {
+  const el = e.target && e.target.closest ? e.target.closest('.rot-rail-row[data-tk]') : null;
+  if(!el) return;
+  const ticker = String(el.dataset.tk||'').trim().toUpperCase();
+  if(!ticker) return;
+  showRotMiniChart(ticker, el._rotStats || null, e);
+});
+document.addEventListener('mouseout', e => {
+  const el = e.target && e.target.closest ? e.target.closest('.rot-rail-row[data-tk]') : null;
+  if(!el) return;
+  const to = e.relatedTarget;
+  if(to && to.closest && to.closest('.rot-rail-row[data-tk]')) return;
+  hideRotMiniChart();
+});
+document.addEventListener('mousemove', e => {
+  if(!rotMiniPopEl.classList.contains('show')) return;
+  const el = e.target && e.target.closest ? e.target.closest('.rot-rail-row[data-tk]') : null;
+  if(el) _rotMiniPosition(e);
 });
 </script>
 </div>
@@ -902,7 +1622,8 @@ body.watchlist-open #watchlistPanel { display:flex; }
 .wl-settings-btn.danger:hover { color:#f87171; background:#1e1212; }
 .watchlist-colhead {
   display:grid; grid-template-columns:minmax(0,1fr) 56px 54px 18px; gap:6px; align-items:center;
-  padding:8px 10px; border-bottom:1px solid #232323; color:#888888; font-family:var(--sans); font-size:12px;
+  padding:6px 10px; border-bottom:1px solid #1c1c1c; color:#7a7a7a; font-family:var(--sans); font-size:10px;
+  font-weight:500; letter-spacing:.04em; text-transform:uppercase;
 }
 .watchlist-head-metric { justify-self:end; text-align:right; }
 .wl-sortable-head {
@@ -914,23 +1635,25 @@ body.watchlist-open #watchlistPanel { display:flex; }
 .wl-sortable-head.active { color:#d4d4d8; }
 .wl-sortable-head .wl-sort-arrow { font-size:9px; opacity:0.7; }
 .watchlist-list { flex:1; overflow:auto; }
-.watchlist-empty { padding:18px 12px; color:#757575; font-size:11px; line-height:1.45; }
+.watchlist-empty { padding:14px 10px; color:#757575; font-size:11px; line-height:1.45; }
 .watchlist-row {
   position:relative;
-  display:grid; grid-template-columns:minmax(0,1fr) 56px 54px 18px; gap:6px; align-items:center;
-  padding:9px 12px; border-bottom:1px solid #1f1f1f; cursor:pointer; background:transparent; transition:background .12s ease;
+  display:grid; grid-template-columns:minmax(0,1fr) 56px 54px 18px; gap:5px; align-items:center;
+  padding:5px 10px; border-bottom:1px solid #161616; cursor:pointer; background:transparent;
+  transition:background .12s ease;
+  min-height:24px;
 }
-.watchlist-row:hover { background:#151515; }
+.watchlist-row:hover { background:#141414; }
 .watchlist-row.active { background:#181818; box-shadow:inset 2px 0 0 #d4d4d8; }
 .watchlist-section-row {
   grid-template-columns:minmax(0,1fr) auto auto;
-  padding:8px 12px;
-  background:#101010;
-  border-top:1px solid #222222;
-  border-bottom:1px solid #1b1b1b;
+  padding:5px 10px;
+  background:#0e0e0e;
+  border-top:1px solid #1d1d1d;
+  border-bottom:1px solid #161616;
   cursor:default;
 }
-.watchlist-section-row:hover { background:#131313; }
+.watchlist-section-row:hover { background:#111111; }
 .watchlist-row.reorderable { cursor:grab; }
 .watchlist-row.reorderable:active { cursor:grabbing; }
 .watchlist-row.dragging { opacity:.34; }
@@ -944,20 +1667,20 @@ body.watchlist-open #watchlistPanel { display:flex; }
 .watchlist-section-main { min-width:0; display:flex; align-items:center; gap:8px; overflow:hidden; }
 .watchlist-section-label {
   min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  color:#d0d4da; font-family:var(--sans); font-size:10px; font-weight:700;
-  letter-spacing:.12em; text-transform:uppercase;
+  color:#c0c4ca; font-family:var(--sans); font-size:9.5px; font-weight:600;
+  letter-spacing:.10em; text-transform:uppercase;
 }
 .watchlist-section-rule {
   flex:1; min-width:14px; height:1px;
-  background:linear-gradient(90deg, rgba(166,174,188,.50), rgba(166,174,188,0));
+  background:linear-gradient(90deg, rgba(166,174,188,.40), rgba(166,174,188,0));
 }
 .watchlist-symbol {
   min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  font-family:var(--sans); font-size:12px; font-weight:600; color:#f3f4f6; letter-spacing:.01em;
+  font-family:var(--sans); font-size:11.5px; font-weight:500; color:#e8eaed; letter-spacing:.005em;
 }
 .watchlist-price,
 .watchlist-pct {
-  justify-self:end; font-family:var(--sans); font-size:12px;
+  justify-self:end; font-family:var(--sans); font-size:11.5px; font-weight:400;
   font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1;
 }
 .watchlist-price { color:#ffffff; }
@@ -981,10 +1704,10 @@ body.watchlist-open #watchlistPanel { display:flex; }
 .watchlist-section-btn:hover,
 .watchlist-add-btn:hover { color:#ffffff; border-color:#3b3b3b; background:#1a1a1a; }
 .watchlist-add-row {
-  display:flex; justify-content:flex-end; gap:6px;
-  padding:8px 12px 10px; border-bottom:1px solid #1f1f1f; background:transparent;
+  display:flex; justify-content:flex-end; gap:5px;
+  padding:5px 10px 6px; border-bottom:1px solid #161616; background:transparent;
 }
-.watchlist-add-btn { padding:0 8px; color:#a3aab4; }
+.watchlist-add-btn { padding:0 7px; color:#a3aab4; min-height:18px; font-size:9.5px; }
 ::-webkit-scrollbar { width:8px; height:8px; }
 ::-webkit-scrollbar-track { background:var(--bg); }
 ::-webkit-scrollbar-thumb { background:#262626; border-radius:999px; }
@@ -1281,6 +2004,13 @@ select.ctrl-input { cursor:pointer; padding-right:28px; background-image:url("da
 .result-count { padding:10px 14px 6px; }
 .chart-note { padding:8px 2px 0; }
 .table-wrap,.chart-section { padding:14px 16px 18px; }
+#tab-themes .table-wrap, #tab-managers .table-wrap, #tab-insider .table-wrap, #tab-reversals .table-wrap, #tab-zreturns .table-wrap { padding-left:0; padding-right:0; }
+#tab-themes .table-scroll, #tab-managers .table-scroll, #tab-insider .table-scroll, #tab-reversals .table-scroll, #tab-zreturns .table-scroll { border-radius:0; border-left:none; border-right:none; }
+#tab-themes table th:first-child, #tab-themes table td:first-child,
+#tab-managers table th:first-child, #tab-managers table td:first-child,
+#tab-insider table th:first-child, #tab-insider table td:first-child,
+#tab-reversals table th:first-child, #tab-reversals table td:first-child,
+#tab-zreturns table th:first-child, #tab-zreturns table td:first-child { padding-left:14px !important; }
 .table-scroll { overflow:auto; background:linear-gradient(180deg, rgba(255,255,255,.015), rgba(255,255,255,0)), var(--surface2); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-panel); }
 table { width:100%; border-collapse:separate; border-spacing:0; min-width:1120px; }
 thead th { position:sticky; top:0; z-index:2; background:#0b0b0b; border-bottom:1px solid var(--border); padding:13px 12px; text-align:left; user-select:none; cursor:pointer; white-space:nowrap; font-family:var(--sans); font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); box-shadow:0 1px 0 rgba(255,255,255,.02); }
@@ -1312,14 +2042,14 @@ tbody td { padding:11px 12px; white-space:nowrap; font-family:var(--mono); font-
 }
 .sym-chart-popup {
   position:fixed; left:0; top:0; z-index:2100;
-  display:none; width:min(85vw,1350px); height:min(82vh,800px);
+  display:none; width:min(72vw,1100px); height:min(66vh,660px);
   background:#0f0f0f; border:1px solid var(--border2); border-radius:12px;
   box-shadow:0 18px 42px rgba(0,0,0,.62); overflow:hidden;
 }
 .sym-chart-popup.show { display:block; }
 .hm-mini-popup {
   position:fixed; left:0; top:0; z-index:2050;
-  display:none; width:380px; height:220px;
+  display:none; width:320px; height:190px;
   background:#0f0f0f; border:1px solid var(--border2); border-radius:10px;
   box-shadow:0 12px 32px rgba(0,0,0,.62); overflow:hidden;
   pointer-events:none;
@@ -1347,116 +2077,96 @@ tbody td { padding:11px 12px; white-space:nowrap; font-family:var(--mono); font-
 .bubble-tip-val { font-size:12px; font-weight:600; color:#e2e8f0; }
 .bubble-tip-click { text-align:center; padding:7px 0 2px; font-size:10px; color:#4a5568; letter-spacing:.04em; }
 .bubble-tip-mgr-list { font-size:10px; color:#8b8fa8; line-height:1.6; padding-top:4px; border-top:1px solid rgba(255,255,255,.05); }
-/* ---- Bubble Chart v2 ---- */
-.bc-cmdbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface2);}
+
+/* ==== Bubble Chart v2 (namespaced .bc-*) ==== */
+.bc-cmdbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface2)}
 .bc-search-wrap{position:relative;display:flex;align-items:center}
-.bc-search{padding:5px 12px 5px 26px;border-radius:999px;background:var(--panel);border:1px solid #2a2a2a;color:var(--text);font-family:var(--mono);font-size:11px;min-width:160px;outline:none;transition:border-color .12s;}
+.bc-search{padding:5px 12px 5px 26px;border-radius:999px;background:var(--panel);border:1px solid #2a2a2a;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;min-width:160px;outline:none;transition:border-color .12s}
 .bc-search:focus{border-color:#3a3a3a}
 .bc-search::placeholder{color:var(--muted)}
 .bc-search-icon{position:absolute;left:9px;color:var(--muted);font-size:11px;pointer-events:none}
 .bc-cmd-sep{width:1px;height:18px;background:#2a2a2a;margin:0 2px}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:transparent;border:1px solid #222;font-family:var(--mono);font-size:10px;color:var(--dim);cursor:pointer;transition:all .12s;white-space:nowrap;user-select:none;}
-.chip:hover{border-color:#3a3a3a;color:var(--text);background:var(--panel)}
-.chip.active{background:#16200f;border-color:#33AA0055;color:#a5e077}
-.chip-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-right:1px}
-.chip-val{font-weight:600}
-.chip-caret{opacity:.5;margin-left:1px;font-size:9px}
-.chip.control{background:transparent;border-color:#222}
-.chip.control:hover{border-color:#3a3a3a;background:var(--panel)}
-.chip.action{background:transparent;border-style:dashed}
-.chip.action:hover{border-style:solid;background:var(--panel)}
-.pop{position:fixed;z-index:3000;background:#0C0C0C;border:1px solid #2a2a2a;border-radius:10px;padding:8px;min-width:220px;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,.8);font-family:var(--sans);font-size:11px;animation:bc-popIn .12s ease-out;}
-@keyframes bc-popIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-.pop-title{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:4px 8px 8px}
-.pop-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--dim);transition:background .08s;}
-.pop-item:hover{background:var(--panel);color:var(--text)}
-.pop-item.on{color:var(--text)}
-.pop-item .check{color:#33AA00;opacity:0;font-size:10px;width:10px}
-.pop-item.on .check{opacity:1}
-.pop-item .sub{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:10px}
-.pop-row{display:flex;align-items:center;gap:10px;padding:8px;color:var(--dim);}
-.pop-row label{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:60px}
-.pop-row input[type="range"]{flex:1;accent-color:#33AA00}
-.pop-row .val{font-family:var(--mono);color:var(--text);min-width:28px;text-align:right}
-.pop-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;}
-.pop-toggle:hover{background:var(--panel)}
-.pop-toggle .label{color:var(--dim)}
-.pop-toggle.on .label{color:var(--text)}
-.pop-sw{width:28px;height:16px;border-radius:999px;background:#222;position:relative;transition:background .12s;flex-shrink:0}
-.pop-sw::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#888;transition:all .12s}
-.pop-toggle.on .pop-sw{background:#16200f}
-.pop-toggle.on .pop-sw::after{left:14px;background:#33AA00}
-.pop-sep{height:1px;background:#1a1a1a;margin:4px 0}
-.pop-btn{width:100%;padding:6px 10px;border-radius:6px;background:var(--panel);border:1px solid #2a2a2a;color:var(--text);font-family:var(--sans);font-size:11px;cursor:pointer;text-align:left;margin-bottom:2px;}
-.pop-btn:hover{background:var(--panel-2);border-color:#3a3a3a}
-.pop-btn.danger:hover{border-color:#aa3333;color:#ff9a9a}
+.bc-cmd-push{margin-left:auto}
+.bc-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:var(--panel);border:1px solid #2a2a2a;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);cursor:pointer;transition:all .12s;white-space:nowrap;user-select:none}
+.bc-chip:hover{border-color:#3a3a3a;color:var(--text);background:var(--panel)}
+.bc-chip.active{background:#16200f;border-color:#33AA0055;color:#a5e077}
+.bc-chip-label{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-right:1px}
+.bc-chip-val{font-weight:600}
+.bc-chip-caret{opacity:.5;margin-left:1px;font-size:9px}
+.bc-chip.control{background:transparent;border-color:#222}
+.bc-chip.control:hover{border-color:#3a3a3a;background:var(--panel)}
+.bc-chip.action{background:transparent;border-style:dashed}
+.bc-chip.action:hover{border-style:solid;background:var(--panel)}
+.bc-pop{position:fixed;z-index:3000;background:#0C0C0C;border:1px solid #2a2a2a;border-radius:10px;padding:8px;min-width:220px;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,.8);font-size:11px;animation:bcPopIn .12s ease-out}
+@keyframes bcPopIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.bc-pop-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:4px 8px 8px}
+.bc-pop-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--dim);transition:background .08s}
+.bc-pop-item:hover{background:var(--panel);color:var(--text)}
+.bc-pop-item.on{color:var(--text)}
+.bc-pop-item .check{color:#33AA00;opacity:0;font-size:10px;width:10px}
+.bc-pop-item.on .check{opacity:1}
+.bc-pop-item .sub{margin-left:auto;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px}
+.bc-pop-row{display:flex;align-items:center;gap:10px;padding:8px;color:var(--dim)}
+.bc-pop-row label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:60px}
+.bc-pop-row input[type=range]{flex:1;accent-color:#33AA00}
+.bc-pop-row .val{font-family:'JetBrains Mono',monospace;color:var(--text);min-width:28px;text-align:right}
+.bc-pop-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer}
+.bc-pop-toggle:hover{background:var(--panel)}
+.bc-pop-toggle .label{color:var(--dim)}
+.bc-pop-toggle.on .label{color:var(--text)}
+.bc-pop-sw{width:28px;height:16px;border-radius:999px;background:#222;position:relative;transition:background .12s}
+.bc-pop-sw::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#888;transition:all .12s}
+.bc-pop-toggle.on .bc-pop-sw{background:#16200f}
+.bc-pop-toggle.on .bc-pop-sw::after{left:14px;background:#33AA00}
+.bc-pop-sep{height:1px;background:#1a1a1a;margin:4px 0}
+.bc-pop-btn{width:100%;padding:6px 10px;border-radius:6px;background:var(--panel);border:1px solid #2a2a2a;color:var(--text);font-size:11px;cursor:pointer;text-align:left}
+.bc-pop-btn:hover{background:var(--panel-2);border-color:#3a3a3a}
+.bc-pop-btn.danger:hover{border-color:#aa3333;color:#ff9a9a}
 .bc-seg{display:inline-flex;background:var(--panel);border-radius:8px;border:1px solid #2a2a2a;padding:2px;gap:2px}
-.seg-btn{padding:4px 9px;border-radius:6px;background:transparent;border:none;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.04em;cursor:pointer;transition:all .12s;text-transform:uppercase;}
-.seg-btn:hover{color:var(--dim)}
-.seg-btn.active{background:#111;color:var(--text)}
-#bcChartArea{flex:1;display:flex;min-height:0;position:relative}
-.bc-canvas-wrap{flex:1;position:relative;min-height:0;overflow:hidden}
-#bcChart{display:block;width:100%;height:100%;cursor:crosshair}
-.quad-label{position:absolute;pointer-events:none;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;padding:3px 8px;border-radius:4px;background:rgba(10,10,12,.6);display:none;opacity:.8}
-.quad-label.on{display:block}
-#bc-rail{width:0;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden;transition:width .2s cubic-bezier(.2,.8,.2,1);}
-#bc-rail.open{width:300px}
-#bc-railInner{flex:1;overflow:auto;display:flex;flex-direction:column}
-#bc-railInner::-webkit-scrollbar{width:5px}
-#bc-railInner::-webkit-scrollbar-thumb{background:#222;border-radius:3px}
-.rail-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
-.rail-head h3{font-size:12px;font-weight:600;letter-spacing:.02em}
-.rail-head .close{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1}
-.rail-head .close:hover{color:var(--text)}
-.rail-stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin:10px;border-radius:8px;overflow:hidden}
-.rail-stat{background:var(--panel);padding:8px 10px}
-.rail-stat-lbl{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
-.rail-stat-val{font-size:14px;font-weight:600;font-family:var(--mono)}
-.rail-section-title{padding:5px 14px;font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;border-top:1px solid var(--border)}
-.rail-list{display:flex;flex-direction:column}
-.rail-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:7px 14px;border-top:1px solid var(--border);cursor:pointer;transition:background .1s}
-.rail-row:hover{background:var(--panel)}
-.rail-row .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.rail-row .tk{font-family:var(--mono);font-size:11px;font-weight:600}
-.rail-row .co{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
-.rail-row .gi{font-family:var(--mono);font-size:10px;font-weight:600}
-.rail-row .star{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 4px}
-.rail-row .star.on{color:#facc15}
-.rail-row .star:hover{color:#facc15}
-#bc-tip{position:fixed;z-index:2200;background:rgba(8,8,10,.96);backdrop-filter:blur(8px);border:1px solid #2a2a2a;border-radius:10px;padding:0;min-width:240px;max-width:290px;box-shadow:0 20px 60px rgba(0,0,0,.6);pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;overflow:hidden;}
-#bc-tip.show{opacity:1;transform:translateY(0)}
-.tip-head{padding:10px 14px 8px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid rgba(255,255,255,.04)}
-.tip-tk{font-size:15px;font-weight:700;font-family:var(--mono);letter-spacing:.02em}
-.tip-co{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-.tip-sector{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.06em;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.04)}
-.tip-body{padding:3px 0 8px}
-.tip-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 14px}
-.tip-row .lbl{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.tip-row .val{font-size:11px;font-weight:600;font-family:var(--mono)}
-.tip-spark{height:28px;margin:5px 14px 3px;position:relative}
-.tip-spark svg{width:100%;height:100%;display:block}
-.tip-arch{margin:6px 14px 8px;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,.03);font-family:var(--mono);font-size:10px;color:var(--dim);display:flex;align-items:center;gap:6px}
-.tip-arch .arch-icon{font-size:11px}
-.tip-hint{padding:6px 14px;font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;letter-spacing:.1em;border-top:1px solid rgba(255,255,255,.04);text-transform:uppercase}
-.bc-menu{position:fixed;z-index:2500;background:#111;border:1px solid #2a2a2a;border-radius:10px;padding:6px;min-width:210px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
-.bc-menu-title{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:5px 8px 4px}
-.bc-menu-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-family:var(--sans);font-size:12px;color:var(--text);cursor:pointer;transition:background .1s}
-.bc-menu-item:hover{background:var(--panel-2)}
-.bc-menu-item.on{background:var(--panel-2)}
-.bc-menu-item .check{width:12px;color:#33AA00;font-size:11px;visibility:hidden}
-.bc-menu-item.on .check{visibility:visible}
-.bc-menu-item .sub{color:var(--muted);font-size:10px;margin-left:auto;font-family:var(--mono)}
-.bc-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:7px 14px;border-top:1px solid var(--border);background:var(--surface);font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.bc-gi-scale{display:inline-flex;align-items:center;border-radius:999px;overflow:hidden;border:1px solid #2a2a2a}
-.gi-seg{padding:3px 7px;font-family:var(--mono);font-size:9px;cursor:pointer;transition:opacity .12s}
-.gi-seg.dim{opacity:.3}
-.gi-seg:hover{opacity:1}
-.bc-axis-meta{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.bc-seg-btn{padding:4px 9px;border-radius:6px;background:transparent;border:none;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em}
+.bc-seg-btn:hover{color:var(--dim)}
+.bc-seg-btn.active{background:#111;color:var(--text)}
+.bc-axis-meta{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .bc-axis-meta b{color:var(--text);font-weight:600;letter-spacing:.02em;text-transform:none;cursor:pointer;border-bottom:1px dashed #2a2a2a;padding-bottom:1px}
-.bc-result-count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.bc-result-count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
 .bc-result-count b{color:var(--text)}
-.bc-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;font-family:var(--mono);color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;pointer-events:none}
-.sym-chart-popup.large-chart { width:min(88vw,1500px); }
+.bc-canvas-wrap{flex:1;position:relative;min-height:0;overflow:hidden}
+#bcReactRoot{position:absolute;inset:0}
+#bcReactRoot canvas{display:block;width:100%;height:100%;cursor:crosshair}
+.bc-quad-label{position:absolute;pointer-events:none;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.12em;padding:4px 10px;border-radius:4px;background:rgba(10,10,12,.6);backdrop-filter:blur(4px);display:none}
+.bc-quad-label.on{display:block;opacity:.8}
+.bc-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:7px 14px;border-top:1px solid var(--border);background:var(--surface);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.bc-gi-scale{display:inline-flex;align-items:center;border-radius:999px;overflow:hidden;border:1px solid #2a2a2a}
+.bc-gi-seg{padding:3px 7px;font-family:'JetBrains Mono',monospace;font-size:9px;cursor:pointer;transition:opacity .12s}
+.bc-gi-seg.dim{opacity:.3}
+.bc-gi-seg:hover{opacity:1}
+.bc-rail{width:0;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow:hidden;transition:width .2s cubic-bezier(.2,.8,.2,1)}
+.bc-rail.open{width:300px}
+.bc-rail-inner{flex:1;overflow:auto;display:flex;flex-direction:column}
+.bc-rail-inner::-webkit-scrollbar{width:5px}
+.bc-rail-inner::-webkit-scrollbar-thumb{background:#222;border-radius:3px}
+.bc-rail-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.bc-rail-head h3{font-size:12px;font-weight:600;letter-spacing:.02em}
+.bc-rail-head .close{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px}
+.bc-rail-head .close:hover{color:var(--text)}
+.bc-rail-stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin:10px;border-radius:8px;overflow:hidden}
+.bc-rail-stat{background:var(--panel);padding:8px 10px}
+.bc-rail-stat-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.bc-rail-stat-val{font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.bc-rail-section-title{padding:5px 14px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;border-top:1px solid var(--border)}
+.bc-rail-list{display:flex;flex-direction:column}
+.bc-rail-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:7px 14px;border-top:1px solid var(--border);cursor:pointer}
+.bc-rail-row:hover{background:var(--panel)}
+.bc-rail-row .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.bc-rail-row .tk{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600}
+.bc-rail-row .co{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px}
+.bc-rail-row .gi{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600}
+.bc-rail-row .star{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 4px}
+.bc-rail-row .star.on{color:#facc15}
+.bc-rail-row .star:hover{color:#facc15}
+.bc-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;pointer-events:none}
+/* ==== /Bubble Chart v2 ==== */
+.sym-chart-popup.large-chart { width:min(75vw,1150px); }
 .sym-chart-popup .tradingview-widget-container,
 .sym-chart-popup .tradingview-widget-container__widget {
   width:100%; height:100%;
@@ -1589,6 +2299,63 @@ tbody td { padding:11px 12px; white-space:nowrap; font-family:var(--mono); font-
   margin:0;
 }
 .hm-val { font-family:var(--mono); font-weight:600; font-size:clamp(9px, calc(var(--hm-cell) * 0.135), 12px); line-height:1; color:rgba(255,255,255,.9); text-align:center; }
+/* Themes heatmap — bold oklch direction. Scoped to .hm-themes so Majors/SP500 are untouched. */
+.hm-cell.hm-themes {
+  border:none;
+  outline:1px solid rgba(0,0,0,0.45);
+  outline-offset:-1px;
+  align-items:flex-start;
+  justify-content:flex-start;
+  padding:clamp(5px, calc(var(--hm-cell) * 0.09), 12px);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.hm-cell.hm-themes:hover { outline-color:rgba(255,255,255,.22)!important; transform:translateY(-1px); }
+.hm-cell.hm-themes.hm-strong { outline:1px solid rgba(0,0,0,0.55); outline-offset:-1px; }
+.hm-cell.hm-themes .hm-ticker {
+  font-weight:800;
+  font-size:clamp(10px, calc(var(--hm-cell) * 0.20), 18px);
+  color:#fff;
+  text-align:left;
+}
+.hm-cell.hm-themes .hm-name {
+  font-family:var(--sans);
+  font-size:clamp(7px, calc(var(--hm-cell) * 0.115), 11px);
+  color:rgba(255,255,255,.74);
+  font-weight:500;
+  -webkit-line-clamp:1;
+  letter-spacing:-.005em;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  display:block;
+  -webkit-box-orient:initial;
+}
+.hm-cell.hm-themes .hm-val {
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+  font-size:clamp(9px, calc(var(--hm-cell) * 0.145), 14px);
+  color:#fff;
+  letter-spacing:-.01em;
+  text-align:left;
+  margin-top:auto;
+}
+/* Themes grouped-view sections */
+.hm-grid.hm-grouped { display:block; overflow-y:auto; overflow-x:hidden; padding:0; }
+.hm-th-section { padding:6px calc(var(--hm-pad,4px) * 1px) 10px; }
+.hm-th-section + .hm-th-section { border-top:1px solid rgba(255,255,255,.05); }
+.hm-th-section-head {
+  display:flex; align-items:baseline; gap:10px;
+  padding:10px 4px 8px;
+}
+.hm-th-section-label { font-family:var(--sans); font-size:13px; font-weight:700; color:#e0e0e0; letter-spacing:-.01em; }
+.hm-th-section-count { font-family:var(--mono); font-size:10px; color:#555; margin-left:auto; letter-spacing:.06em; }
+.hm-th-sub-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(var(--hm-cell,88px), 1fr));
+  grid-auto-rows:var(--hm-cell,88px);
+  gap:var(--hm-gap,4px);
+}
 .hm-grid.hm-tight .hm-cell { border-radius:0; }
 .hm-grid.hm-tight .hm-name { -webkit-line-clamp:1; }
 .hm-grid.hm-sp500 {
@@ -1678,6 +2445,17 @@ tbody td { padding:11px 12px; white-space:nowrap; font-family:var(--mono); font-
   font-family:var(--mono);
   font-size:12px;
 }
+.rot-qbar { display:flex; gap:1px; padding:4px 14px; border-bottom:1px solid var(--border); background:rgba(0,0,0,.25); flex-shrink:0; }
+.rot-qbar-cell { flex:1; padding:4px 10px; border-radius:8px; display:flex; align-items:center; gap:8px; }
+.rot-qbar-label { font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:.10em; font-weight:600; }
+.rot-qbar-count { font-size:17px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; color:var(--text); }
+.rot-qbar-tickers { flex:1; display:flex; gap:1px; flex-wrap:wrap; align-items:center; font-family:var(--mono); font-size:9px; }
+.rot-qbar-tk { display:inline-flex; align-items:center; padding:1px 1px; background:transparent; color:var(--text); cursor:pointer; border-radius:2px; transition:background .1s; line-height:1.3; }
+.rot-qbar-tk:hover { background:rgba(255,255,255,.05); }
+.rot-qbar-tk .brk { font-size:9px; font-weight:700; opacity:.7; }
+.rot-qbar-tk .tk-lbl { padding:0 1px; font-size:9px; }
+.rot-qbar-more { font-family:var(--mono); font-size:9px; color:var(--muted); padding:1px 5px; border-radius:3px; border:1px solid var(--border2); cursor:pointer; transition:all .1s; white-space:nowrap; }
+.rot-qbar-more:hover { color:var(--text); border-color:#444; background:rgba(255,255,255,.04); }
 .rot-frame-wrap { position:relative; flex:1; min-height:0; background:#000; display:flex; }
 .rot-frame { display:block; flex:1; min-width:0; min-height:0; width:100%; height:100%; border:none; background:#000; }
 .rot-frame-msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-family:var(--mono); font-size:12px; pointer-events:none; }
@@ -1690,6 +2468,9 @@ tbody td { padding:11px 12px; white-space:nowrap; font-family:var(--mono); font-
 .ind-menu-btn.open { color:var(--text); border-color:#3a3a3a; background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.04)); box-shadow:0 0 0 2px rgba(51,170,0,.15), 0 2px 8px rgba(0,0,0,.3); }
 .ind-menu-btn .ind-chevron { font-size:8px; opacity:.6; transition:transform .15s ease; }
 .ind-menu-btn.open .ind-chevron { transform:rotate(180deg); }
+.bl-measure-btn { appearance:none; background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02)); color:var(--dim); border:1px solid var(--border2); border-radius:9px; padding:0 6px; min-height:30px; width:30px; cursor:pointer; transition:all .15s ease; display:inline-flex; align-items:center; justify-content:center; outline:none; }
+.bl-measure-btn:hover { color:var(--text); border-color:#3a3a3a; background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.04)); box-shadow:0 2px 8px rgba(0,0,0,.3); }
+.bl-measure-btn.active { color:#60a5fa; border-color:#3b82f6; background:rgba(59,130,246,.12); box-shadow:0 0 0 2px rgba(59,130,246,.2), 0 2px 8px rgba(0,0,0,.3); }
 .ind-dropdown { position:absolute; top:calc(100% + 6px); left:0; min-width:230px; background:#0d0d0d; border:1px solid #252525; border-radius:10px; padding:5px; z-index:1200; box-shadow:0 14px 36px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04); }
 .ind-section-label { padding:5px 10px 2px; color:#444; font-family:var(--mono); font-size:9px; text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
 .ind-sep { height:1px; background:rgba(255,255,255,.05); margin:3px 4px; }
@@ -1999,6 +2780,15 @@ body.refined .ind-menu-btn:hover {
 #refinedTweaks .rt-opt.active {
   background: #1c1c1c; border-color: #3a3a3a; color: #fff;
 }
+.qbar-mini-popup {
+  position:fixed; left:0; top:0; z-index:3000;
+  display:none; width:320px;
+  background:#0f0f0f; border:1px solid rgba(255,255,255,.12); border-radius:10px;
+  box-shadow:0 12px 32px rgba(0,0,0,.62); overflow:hidden;
+  pointer-events:none; flex-direction:column;
+}
+.qbar-mini-popup.show { display:flex; }
+.qbar-mini-chart-area { height:190px; overflow:hidden; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -2059,18 +2849,6 @@ body.refined .ind-menu-btn:hover {
     <option value="">All managers</option>
   </select>
   <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Change</span>
-  <select id="mgrCh" class="ctrl-input" onchange="mgrFilter()">
-    <option value="">All</option><option value="NEW">New</option><option value="INCREASED">Increased</option>
-    <option value="DECREASED">Decreased</option><option value="SOLD">Sold</option><option value="UNCHANGED">Unchanged</option>
-  </select>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">GI</span>
-  <select id="mgrGI" class="ctrl-input" onchange="mgrFilter()">
-    <option value="">All</option><option value="dark-green">Strong Accum</option><option value="green">Accumulation</option>
-    <option value="yellow">Neutral</option><option value="orange">Distribution</option><option value="red">Heavy Dist</option>
-  </select>
-  <div class="ctrl-sep"></div>
   <span class="ctrl-label">Min Managers</span>
   <input id="mgrMM" class="ctrl-input" type="number" min="1" placeholder="1" style="width:60px" oninput="mgrFilter()">
   <div class="ctrl-sep"></div>
@@ -2097,77 +2875,55 @@ body.refined .ind-menu-btn:hover {
   <th onclick="mgrSort('company')" data-col="company">Company</th>
   <th onclick="mgrSort('totalVal')" data-col="totalVal" class="sort-desc">Total Held</th>
   <th onclick="mgrSort('managerCount')" data-col="managerCount">Managers</th>
-  <th onclick="mgrSort('gi_score')" data-col="gi_score" style="width:110px;text-align:center">GI</th>
   <th onclick="mgrSort('new_count')" data-col="new_count">New</th>
   <th onclick="mgrSort('inc_count')" data-col="inc_count">Increased</th>
   <th onclick="mgrSort('dec_count')" data-col="dec_count">Decreased</th>
   <th onclick="mgrSort('insider_buys')" data-col="insider_buys">Insider Buys</th>
+  <th onclick="mgrSort('gi_score')" data-col="gi_score" style="width:110px;text-align:center">GI</th>
 </tr></thead><tbody id="mgrBody"></tbody></table></div></div>
 <div class="pagination" id="mgrPag"></div>
 </div>
 
 <!-- TAB 2: BUBBLE CHART -->
-<div id="tab-bubble" class="tab-pane" style="overflow:hidden;display:flex;flex-direction:column">
-<!-- v2 command bar — chips rendered by React via portal into #chipsWrap -->
+<div id="tab-bubble" class="tab-pane" style="overflow:hidden">
+<!-- legacy canvas kept hidden as safety so getElementById('bubbleChart') stays non-null -->
+<canvas id="bubbleChart" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px"></canvas>
 <div class="bc-cmdbar">
-  <div class="bc-search-wrap">
-    <span class="bc-search-icon">⌕</span>
-    <input id="searchInput" class="bc-search" placeholder="Search ticker or company…" autocomplete="off" spellcheck="false">
+  <div id="bcChipsWrap" style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"></div>
+  <div class="bc-cmd-push"></div>
+  <div class="bc-seg" id="bcViewModeSeg">
+    <button class="bc-seg-btn active" data-mode="default">Default</button>
+    <button class="bc-seg-btn" data-mode="sector">By Sector</button>
   </div>
-  <div class="bc-cmd-sep"></div>
-  <div id="chipsWrap" style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"></div>
-  <div style="flex:1"></div>
-  <div class="bc-seg" id="viewModeSeg">
-    <button class="seg-btn active" data-mode="default">Default</button>
-    <button class="seg-btn" data-mode="sector">By Sector</button>
-    <button class="seg-btn" data-mode="density">Heatmap</button>
-  </div>
-  <button class="th-cat-btn" onclick="tabRefresh('bubble',this)" title="Reload bubble chart data" style="margin-left:6px">↻ Refresh</button>
+</div>
+<!-- 2nd row: Refresh button + timestamp -->
+<div class="bc-cmdbar" style="padding:6px 12px;border-top:none">
+  <button class="th-cat-btn" onclick="tabRefresh('bubble',this)" title="Reload bubble chart data">↻ Refresh</button>
   <span class="tab-refresh-ts" id="bubbleRefreshTs"></span>
 </div>
-<!-- axis meta strip -->
-<div style="display:flex;align-items:center;gap:14px;padding:6px 14px;border-bottom:1px solid var(--border);background:var(--surface)">
-  <div class="bc-axis-meta"><span>Y ↕</span><b id="yAxisLabel">GI Score</b></div>
-  <div class="bc-axis-meta"><span>X ↔</span><b id="xAxisLabel">Managers Holding</b></div>
-  <div class="bc-axis-meta"><span>⬤ size</span><b id="sizeLabel">Held Value</b></div>
-  <div class="bc-result-count"><b id="rcShown">0</b> of <span id="rcTotal">0</span></div>
-</div>
-<!-- chart + rail -->
-<div id="bcChartArea">
+<div style="flex:1;display:flex;min-height:0;position:relative">
   <div class="bc-canvas-wrap">
-    <canvas id="chart"></canvas>
-    <!-- quadrant labels -->
-    <div class="quad-label" id="q-tl" style="top:10px;left:10px"></div>
-    <div class="quad-label" id="q-tr" style="top:10px;right:10px"></div>
-    <div class="quad-label" id="q-bl" style="bottom:32px;left:10px"></div>
-    <div class="quad-label" id="q-br" style="bottom:32px;right:10px"></div>
-    <div id="emptyState" class="bc-empty" style="display:none">
-      <div>No tickers match current filters</div>
+    <div id="bcReactRoot"></div>
+    <div id="bcEmptyState" class="bc-empty" style="display:none">
+      <div>No tickers match filters</div>
       <div style="font-size:10px">Try loosening constraints</div>
     </div>
   </div>
-  <!-- selection rail -->
-  <aside id="bc-rail">
-    <div id="bc-railInner"></div>
-  </aside>
+  <aside id="bcRail" class="bc-rail"><div id="bcRailInner" class="bc-rail-inner"></div></aside>
 </div>
-<!-- legend foot -->
 <div class="bc-foot">
-  <span style="text-transform:none;letter-spacing:0;color:var(--muted)">GI Tier</span>
-  <div class="bc-gi-scale" id="giScale">
-    <span class="gi-seg" data-tier="red" style="background:#ef444422;color:#ef4444">Heavy Dist</span>
-    <span class="gi-seg" data-tier="orange" style="background:#f9731622;color:#f97316">Dist</span>
-    <span class="gi-seg" data-tier="yellow" style="background:#facc1522;color:#facc15">Neutral</span>
-    <span class="gi-seg" data-tier="green" style="background:#86efac22;color:#86efac">Accum</span>
-    <span class="gi-seg" data-tier="dark-green" style="background:#22c55e22;color:#22c55e">Strong Accum</span>
+  <span style="color:var(--muted)">GI Tier</span>
+  <div class="bc-gi-scale" id="bcGiScale">
+    <span class="bc-gi-seg" data-tier="red"        style="background:#ef444422;color:#ef4444">Heavy Dist</span>
+    <span class="bc-gi-seg" data-tier="orange"     style="background:#f9731622;color:#f97316">Distribution</span>
+    <span class="bc-gi-seg" data-tier="yellow"     style="background:#facc1522;color:#facc15">Neutral</span>
+    <span class="bc-gi-seg" data-tier="green"      style="background:#86efac22;color:#86efac">Accumulation</span>
+    <span class="bc-gi-seg" data-tier="dark-green" style="background:#22c55e22;color:#22c55e">Strong Accum</span>
   </div>
-  <span style="margin-left:auto;text-transform:none;letter-spacing:0;font-size:10px;color:#333">scroll=zoom · drag=lasso · ⇧drag=pan · dbl-click=reset</span>
+  <span style="margin-left:auto;font-size:10px;color:#555">scroll=zoom · drag=pan · dbl-click=reset</span>
 </div>
-<!-- tooltip -->
-<div id="bc-tip"></div>
 <div id="bubbleOverlay" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:rgba(10,10,12,.85);z-index:5"><span id="bubbleOverlayMsg" class="muted" style="font-family:var(--mono);font-size:12px"></span></div>
 </div>
-
 <!-- TAB 3: BUY LEVELS -->
 <div id="tab-buylevels" class="tab-pane active" style="overflow:hidden">
 <div class="chart-controls">
@@ -2204,6 +2960,9 @@ body.refined .ind-menu-btn:hover {
           oninput="blSetVcWidthScale(this.value)" onchange="blSetVcWidthScale(this.value)">
         <span id="blVcWidthScaleValue" class="bl-settings-value" style="min-width:34px;text-align:right">1.00x</span>
       </div>
+      <div class="ind-sep"></div>
+      <div class="ind-section-label">Scale</div>
+      <div class="bl-ind-item" onclick="blToggleLogScale()"><span class="ind-chk" id="blLogScaleChk"></span><span class="ind-label">Logarithmic</span></div>
       <div class="ind-sep"></div>
       <div class="ind-section-label" style="display:flex;align-items:center;justify-content:space-between">
         <span>Colors</span>
@@ -2465,6 +3224,121 @@ body.refined .ind-menu-btn:hover {
         <input type="color" id="blMA200ColorCustom" value="#ef4444" style="position:fixed;left:-999px;top:-999px;width:0;height:0;opacity:0;pointer-events:none" oninput="blSetMA200Color(this.value)" onchange="blSetMA200Color(this.value)">
       </div>
       <div class="ind-sep"></div>
+      <div class="ind-section-label">Trendlines</div>
+      <div class="bl-ind-item" onclick="blToggleTrendlines()" style="flex-wrap:wrap;gap:0">
+        <span class="ind-chk" id="blIndTrendlinesChk"></span>
+        <span class="ind-label">Auto Trendlines</span>
+        <span style="display:inline-flex;gap:4px;margin-left:6px">
+          <span id="blTrendDownSwatch" class="bl-color-swatch" style="background:#ef4444" title="Downtrend color" onclick="event.stopPropagation();blToggleIndColorPicker('blTrendDownColorPanel','blTrendDownColorCustom',_blTrendDownColor)"></span>
+          <span id="blTrendUpSwatch" class="bl-color-swatch" style="background:#22c55e" title="Uptrend color" onclick="event.stopPropagation();blToggleIndColorPicker('blTrendUpColorPanel','blTrendUpColorCustom',_blTrendUpColor)"></span>
+          <span id="blTrendBrokenSwatch" class="bl-color-swatch" style="background:#666666" title="Broken line color" onclick="event.stopPropagation();blToggleIndColorPicker('blTrendBrokenColorPanel','blTrendBrokenColorCustom',_blTrendBrokenColor)"></span>
+        </span>
+      </div>
+      <div id="blTrendDownColorPanel" style="display:none;padding:8px 12px 10px;border-top:1px solid #1e1e1e">
+        <div style="color:#555;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Downtrend color</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#FF4444')" style="background:#FF4444" title="Bright red"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#ef4444')" style="background:#ef4444" title="Red"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#CC3300')" style="background:#CC3300" title="Dark red"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#FF8800')" style="background:#FF8800" title="Orange"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#FF6688')" style="background:#FF6688" title="Pink"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#FFCC00')" style="background:#FFCC00" title="Gold"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#FFFFFF')" style="background:#FFFFFF" title="White"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#CCCCCC')" style="background:#CCCCCC" title="Silver"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#AAAAAA')" style="background:#AAAAAA" title="Grey"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#AA66FF')" style="background:#AA66FF" title="Purple"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendDownColor('#00AAFF')" style="background:#00AAFF" title="Blue"></span>
+          <span class="bl-color-swatch" style="background:linear-gradient(135deg,#ff4444,#ff8800,#ffcc00,#44ddaa,#00aaff,#aa66ff)" title="Custom color" onclick="blTriggerCustomColor('blTrendDownColorCustom',this,event)"></span>
+        </div>
+        <input type="color" id="blTrendDownColorCustom" value="#ef4444" style="position:fixed;left:-999px;top:-999px;width:0;height:0;opacity:0;pointer-events:none" oninput="blSetTrendDownColor(this.value)" onchange="blSetTrendDownColor(this.value)">
+      </div>
+      <div id="blTrendUpColorPanel" style="display:none;padding:8px 12px 10px;border-top:1px solid #1e1e1e">
+        <div style="color:#555;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Uptrend color</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#22c55e')" style="background:#22c55e" title="Green"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#33AA00')" style="background:#33AA00" title="Forest green"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#44DDAA')" style="background:#44DDAA" title="Mint"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#00CC88')" style="background:#00CC88" title="Teal"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#4ade80')" style="background:#4ade80" title="Light green"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#00AAFF')" style="background:#00AAFF" title="Blue"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#4466FF')" style="background:#4466FF" title="Indigo"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#FFCC00')" style="background:#FFCC00" title="Gold"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#FFFFFF')" style="background:#FFFFFF" title="White"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#CCCCCC')" style="background:#CCCCCC" title="Silver"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendUpColor('#99DDFF')" style="background:#99DDFF" title="Sky"></span>
+          <span class="bl-color-swatch" style="background:linear-gradient(135deg,#ff4444,#ff8800,#ffcc00,#44ddaa,#00aaff,#aa66ff)" title="Custom color" onclick="blTriggerCustomColor('blTrendUpColorCustom',this,event)"></span>
+        </div>
+        <input type="color" id="blTrendUpColorCustom" value="#22c55e" style="position:fixed;left:-999px;top:-999px;width:0;height:0;opacity:0;pointer-events:none" oninput="blSetTrendUpColor(this.value)" onchange="blSetTrendUpColor(this.value)">
+      </div>
+      <div id="blTrendBrokenColorPanel" style="display:none;padding:8px 12px 10px;border-top:1px solid #1e1e1e">
+        <div style="color:#555;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Broken line color</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#666666')" style="background:#666666" title="Dark grey"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#888888')" style="background:#888888" title="Mid grey"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#AAAAAA')" style="background:#AAAAAA" title="Grey"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#CCCCCC')" style="background:#CCCCCC" title="Silver"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#FFFFFF')" style="background:#FFFFFF" title="White"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#FF4444')" style="background:#FF4444" title="Red"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#FF8800')" style="background:#FF8800" title="Orange"></span>
+          <span class="bl-color-swatch" onclick="blSetTrendBrokenColor('#FFCC00')" style="background:#FFCC00" title="Gold"></span>
+          <span class="bl-color-swatch" style="background:linear-gradient(135deg,#ff4444,#ff8800,#ffcc00,#44ddaa,#00aaff,#aa66ff)" title="Custom color" onclick="blTriggerCustomColor('blTrendBrokenColorCustom',this,event)"></span>
+        </div>
+        <input type="color" id="blTrendBrokenColorCustom" value="#666666" style="position:fixed;left:-999px;top:-999px;width:0;height:0;opacity:0;pointer-events:none" oninput="blSetTrendBrokenColor(this.value)" onchange="blSetTrendBrokenColor(this.value)">
+      </div>
+      <div class="bl-ind-item bl-settings-row" onclick="event.stopPropagation()" style="gap:8px">
+        <span class="ind-label" style="min-width:72px;font-size:10px">Sensitivity</span>
+        <input id="blTrendPivotKInput" class="bl-settings-slider" style="flex:1" type="range" min="1" max="19" step="1" value="16"
+          oninput="blSetTrendSensitivity(this.value)" onchange="blSetTrendSensitivity(this.value)">
+        <span id="blTrendPivotKValue" class="bl-settings-value" style="min-width:34px;text-align:right">16</span>
+      </div>
+      <div class="bl-ind-item" onclick="blToggleBrokenTrendlines()"><span class="ind-chk" id="blIndBrokenTrendlinesChk">&#10003;</span><span class="ind-label">Show Broken Lines</span></div>
+      <div class="bl-ind-item" onclick="blToggleTrendWeight()"><span class="ind-chk" id="blIndTrendWeightChk"></span><span class="ind-label">Weight by Significance</span></div>
+      <div id="blTrendWeightScaleRow" class="bl-ind-item bl-settings-row" onclick="event.stopPropagation()" style="gap:8px;display:none">
+        <span class="ind-label" style="min-width:42px;font-size:10px">Scale</span>
+        <input id="blTrendWeightScaleInput" class="bl-settings-slider" style="flex:1" type="range" min="10" max="100" step="5" value="70"
+          oninput="blSetTrendWeightScale(this.value)" onchange="blSetTrendWeightScale(this.value)">
+        <span id="blTrendWeightScaleValue" class="bl-settings-value" style="min-width:34px;text-align:right">70%</span>
+      </div>
+      <div class="ind-sep"></div>
+      <div class="ind-section-label">Support / Resistance</div>
+      <div class="bl-ind-item" onclick="blToggleSRLines()" style="flex-wrap:wrap;gap:0">
+        <span class="ind-chk" id="blIndSRLinesChk"></span>
+        <span class="ind-label">S/R Levels</span>
+        <span id="blSRSwatch" class="bl-color-swatch" style="background:#888888;margin-left:6px" title="Line color" onclick="event.stopPropagation();blToggleIndColorPicker('blSRColorPanel','blSRColorCustom',_blSRColor)"></span>
+      </div>
+      <div id="blSRColorPanel" style="display:none;padding:8px 12px 10px;border-top:1px solid #1e1e1e">
+        <div style="color:#555;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">S/R line color</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <span class="bl-color-swatch" onclick="blSetSRColor('#888888')" style="background:#888888" title="Mid grey"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#666666')" style="background:#666666" title="Dark grey"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#AAAAAA')" style="background:#AAAAAA" title="Grey"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#CCCCCC')" style="background:#CCCCCC" title="Silver"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#FFFFFF')" style="background:#FFFFFF" title="White"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#FFCC00')" style="background:#FFCC00" title="Gold"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#FF8800')" style="background:#FF8800" title="Orange"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#facc15')" style="background:#facc15" title="Yellow"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#00AAFF')" style="background:#00AAFF" title="Blue"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#AA66FF')" style="background:#AA66FF" title="Purple"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#22c55e')" style="background:#22c55e" title="Green"></span>
+          <span class="bl-color-swatch" onclick="blSetSRColor('#ef4444')" style="background:#ef4444" title="Red"></span>
+          <span class="bl-color-swatch" style="background:linear-gradient(135deg,#ff4444,#ff8800,#ffcc00,#44ddaa,#00aaff,#aa66ff)" title="Custom color" onclick="blTriggerCustomColor('blSRColorCustom',this,event)"></span>
+        </div>
+        <input type="color" id="blSRColorCustom" value="#888888" style="position:fixed;left:-999px;top:-999px;width:0;height:0;opacity:0;pointer-events:none" oninput="blSetSRColor(this.value)" onchange="blSetSRColor(this.value)">
+      </div>
+      <div class="bl-ind-item bl-settings-row" onclick="event.stopPropagation()" style="gap:8px">
+        <span class="ind-label" style="min-width:72px;font-size:10px">Sensitivity</span>
+        <input id="blSRSensitivityInput" class="bl-settings-slider" style="flex:1" type="range" min="1" max="19" step="1" value="14"
+          oninput="blSetSRSensitivity(this.value)" onchange="blSetSRSensitivity(this.value)">
+        <span id="blSRSensitivityValue" class="bl-settings-value" style="min-width:34px;text-align:right">14</span>
+      </div>
+      <div class="bl-ind-item" onclick="blToggleSRWeight()"><span class="ind-chk" id="blIndSRWeightChk"></span><span class="ind-label">Weight by Significance</span></div>
+      <div id="blSRWeightScaleRow" class="bl-ind-item bl-settings-row" onclick="event.stopPropagation()" style="gap:8px;display:none">
+        <span class="ind-label" style="min-width:42px;font-size:10px">Scale</span>
+        <input id="blSRWeightScaleInput" class="bl-settings-slider" style="flex:1" type="range" min="10" max="100" step="5" value="70"
+          oninput="blSetSRWeightScale(this.value)" onchange="blSetSRWeightScale(this.value)">
+        <span id="blSRWeightScaleValue" class="bl-settings-value" style="min-width:34px;text-align:right">70%</span>
+      </div>
+      <div class="ind-sep"></div>
       <div class="ind-section-label">Volume</div>
       <div class="bl-ind-item bl-settings-row" onclick="event.stopPropagation()" style="gap:8px">
         <span class="ind-label" style="min-width:72px;font-size:10px">Volume Scale</span>
@@ -2528,7 +3402,12 @@ body.refined .ind-menu-btn:hover {
         <input type="color" id="blVolDownColorCustom" value="#CC3300" style="position:fixed;left:-999px;top:-999px;width:0;height:0;opacity:0;pointer-events:none" oninput="blSetVolDownColor(this.value)" onchange="blSetVolDownColor(this.value)">
       </div>
       <div class="bl-ind-item" onclick="blToggleVSA()"><span class="ind-chk" id="blIndVSAChk"></span><span class="ind-label">VSA Colors</span></div>
-      <div class="ind-sep"></div>
+    </div>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div style="position:relative;display:inline-block">
+    <button id="blBtnChartDisplay" class="ind-menu-btn" onclick="blToggleChartDisplayMenu(event)">Chart Display <span class="ind-chevron">&#9660;</span></button>
+    <div id="blChartDisplayMenu" class="ind-dropdown" style="display:none">
       <div class="ind-section-label">Projections</div>
       <div class="bl-ind-item" onclick="blToggleTargetLines()"><span class="ind-chk" id="blIndTargetLinesChk">&#10003;</span><span class="ind-label">Target Lines</span></div>
       <div class="bl-ind-item" onclick="blToggleStopLine()"><span class="ind-chk" id="blIndStopLineChk">&#10003;</span><span class="ind-label">Target/Stop Line</span></div>
@@ -2548,16 +3427,15 @@ body.refined .ind-menu-btn:hover {
       <div class="bl-ind-item" onclick="blToggleProfile()"><span class="ind-chk" id="blIndProfileChk">&#10003;</span><span class="ind-label">Company Info</span></div>
     </div>
   </div>
+  <button id="blBtnMeasure" class="bl-measure-btn" onclick="blToggleMeasure()" title="Measure"><svg width="18" height="18" viewBox="0 0 14 14" fill="none"><g transform="rotate(-45,7,7)"><rect x="1.5" y="5" width="11" height="4" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><line x1="4.5" y1="5" x2="4.5" y2="7.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="7" y1="5" x2="7" y2="6.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><line x1="9.5" y1="5" x2="9.5" y2="7.5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></g></svg></button>
   <div class="ctrl-sep"></div>
-  <span id="blLiveBadge" style="display:none;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 10px;border-radius:12px;border:1px solid currentColor;opacity:.9;cursor:default;margin-left:auto">
-    <span id="blLiveDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:currentColor"></span>
+  <span id="blLiveBadge" style="display:none;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;opacity:.9;cursor:default;margin-left:auto">
     <span id="blLiveBadgeLabel">Connected</span>
     <span id="blLiveCountdown" style="display:none;color:#ffffff;font-weight:400;letter-spacing:.03em;margin-left:2px"></span>
   </span>
   <div class="ctrl-sep"></div>
   <button class="th-cat-btn" id="blManualRefreshBtn" onclick="tabRefresh('buylevels',this)" title="Refresh chart + watchlist prices">↻ Refresh</button>
-  <span class="tab-refresh-ts" id="blRefreshTs"></span>
-  <select id="blAutoRefreshSelect" class="ctrl-input" onchange="blSetAutoRefresh(this.value)" title="Auto-refresh interval" style="font-size:11px;padding:4px 6px;min-width:0">
+  <select id="blAutoRefreshSelect" class="ctrl-input" onchange="blSetAutoRefresh(this.value)" title="Auto-refresh interval" style="font-size:11px;padding:4px 6px;min-width:0;appearance:none;-webkit-appearance:none;text-align:center">
     <option value="0" selected>Off</option>
     <option value="3">3s</option>
     <option value="5">5s</option>
@@ -2733,12 +3611,12 @@ body.refined .ind-menu-btn:hover {
   <th onclick="zrSortBy('sector')" data-col="sector">Sector</th>
   <th onclick="zrSortBy('insider_buys')" data-col="insider_buys">Insider Buys</th>
   <th onclick="zrSortBy('manager_count')" data-col="manager_count">Managers</th>
-  <th onclick="zrSortBy('avg_5d')" data-col="avg_5d">5d %</th>
-  <th onclick="zrSortBy('avg_10d')" data-col="avg_10d">10d %</th>
-  <th onclick="zrSortBy('avg_20d')" data-col="avg_20d">20d %</th>
-  <th onclick="zrSortBy('avg_30d')" data-col="avg_30d">30d %</th>
-  <th onclick="zrSortBy('avg_50d')" data-col="avg_50d">50d %</th>
-  <th onclick="zrSortBy('n')" data-col="n">n</th>
+  <th onclick="zrSortBy('avg_5d')" data-col="avg_5d" style="text-align:right">5d %</th>
+  <th onclick="zrSortBy('avg_10d')" data-col="avg_10d" style="text-align:right">10d %</th>
+  <th onclick="zrSortBy('avg_20d')" data-col="avg_20d" style="text-align:right">20d %</th>
+  <th onclick="zrSortBy('avg_30d')" data-col="avg_30d" style="text-align:right">30d %</th>
+  <th onclick="zrSortBy('avg_50d')" data-col="avg_50d" style="text-align:right">50d %</th>
+  <th onclick="zrSortBy('n')" data-col="n" style="text-align:center">n</th>
   <th onclick="zrSortBy('gi_score')" data-col="gi_score" style="width:110px;text-align:center">GI</th>
 </tr></thead><tbody id="zrBody"></tbody></table></div></div>
 <div class="pagination" id="zrPag"></div>
@@ -2771,52 +3649,6 @@ body.refined .ind-menu-btn:hover {
       <option value="1__clstr">Top 1/day + Close Strength (prior close in upper half of range)</option>
     </optgroup>
   </select>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Source</span>
-  <select id="rvSource" class="ctrl-input" onchange="rvFilter()">
-    <option value="BOTH">Both</option>
-    <option value="GI">GI only</option>
-    <option value="CUSTOM">Custom only</option>
-  </select>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Family</span>
-  <select id="rvFamily" class="ctrl-input" onchange="rvFilter()">
-    <option value="">All</option>
-    <option value="reversal">Reversal</option>
-    <option value="continuation">Continuation</option>
-  </select>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Mode</span>
-  <select id="rvMode" class="ctrl-input" onchange="rvFilter()">
-    <option value="">All</option>
-    <option value="gi">GI</option>
-    <option value="native_legacy">Native Legacy</option>
-    <option value="native_relaxed">Native Relaxed</option>
-    <option value="mechanics_continuation">Mech Continuation</option>
-    <option value="mechanics_reversal">Mech Reversal</option>
-    <option value="gi_style">GI-Style</option>
-    <option value="reversal">Reversal</option>
-  </select>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Target</span>
-  <select id="rvTgt" class="ctrl-input" onchange="rvFilter()">
-    <option value="">All</option>
-    <option value="atr_1">ATR 1:1</option>
-    <option value="0.15">+15%</option>
-    <option value="0.2">+20%</option>
-  </select>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">ATR Mult</span>
-  <select id="rvAtrM" class="ctrl-input" onchange="rvFilter()">
-    <option value="">All</option>
-    <option value="0.5">0.5x</option>
-    <option value="1">1x</option>
-    <option value="1.5">1.5x</option>
-  </select>
-  <div class="ctrl-sep"></div>
-  <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--muted);font-size:11px">
-    <input id="rvToday" type="checkbox" onchange="rvFilter()" style="accent-color:var(--green)"> Today Only
-  </label>
   <div style="flex-basis:100%;height:0"></div>
   <div class="result-count" id="rvCnt" style="padding:0;align-self:center;margin-right:10px"></div>
   <button class="th-cat-btn" onclick="ensureSignalsData(true)" title="Reload signals">↻ Refresh</button>
@@ -2858,6 +3690,10 @@ body.refined .ind-menu-btn:hover {
   <button class="th-cat-btn" id="hmViewMajors" onclick="hmSetView('majors',this)">Majors</button>
   <button class="th-cat-btn" id="hmViewSP500" onclick="hmSetView('sp500',this)">S&amp;P 500</button>
   <button class="th-cat-btn active" id="hmViewThemes" onclick="hmSetView('themes',this)">Themes</button>
+  <div id="hmThLayoutWrap" style="display:none;align-items:center;gap:8px">
+    <button class="th-cat-btn active" id="hmThFlat" onclick="hmSetThLayout('flat',this)">All</button>
+    <button class="th-cat-btn" id="hmThGrouped" onclick="hmSetThLayout('grouped',this)">Grouped</button>
+  </div>
   <div class="ctrl-sep"></div>
   <span class="ctrl-label">Metric</span>
   <button class="th-cat-btn" id="hmMgi" onclick="hmSetMetric('gi',this)">GI Score</button>
@@ -2868,13 +3704,6 @@ body.refined .ind-menu-btn:hover {
   <button class="th-cat-btn" id="hmM6m" onclick="hmSetMetric('r6m',this)">6M %</button>
   <button class="th-cat-btn" id="hmMYtd" onclick="hmSetMetric('rytd',this)">YTD %</button>
   <button class="th-cat-btn" id="hmM1y" onclick="hmSetMetric('r1y',this)">1Y %</button>
-  <div id="hmCatWrap" style="display:flex;align-items:center;gap:8px">
-    <div class="ctrl-sep"></div>
-    <span class="ctrl-label">Theme</span>
-    <select id="hmCat" class="ctrl-input" onchange="renderHeatmap()" style="min-width:140px">
-      <option value="">All</option>
-    </select>
-  </div>
   <div class="ctrl-sep"></div>
   <button class="th-cat-btn" id="hmRefreshBtn" onclick="tabRefreshHeatmap(this)" title="Reload heatmap data">↻ Refresh</button>
   <span class="tab-refresh-ts" id="hmRefreshTs"></span>
@@ -2911,17 +3740,17 @@ body.refined .ind-menu-btn:hover {
   <th onclick="thSort('ticker')" data-col="ticker">Ticker</th>
   <th onclick="thSort('name')" data-col="name">Theme</th>
   <th onclick="thSort('gi')" data-col="gi" style="width:110px;text-align:center">GI Score</th>
-  <th onclick="thSort('r1d')" data-col="r1d" class="sort-desc">1D %</th>
-  <th onclick="thSort('r2d')" data-col="r2d">2D %</th>
-  <th onclick="thSort('r3d')" data-col="r3d">3D %</th>
-  <th onclick="thSort('r4d')" data-col="r4d">4D %</th>
-  <th onclick="thSort('r1w')" data-col="r1w">1W %</th>
-  <th onclick="thSort('r1m')" data-col="r1m">1M %</th>
-  <th onclick="thSort('r3m')" data-col="r3m">3M %</th>
-  <th onclick="thSort('r6m')" data-col="r6m">6M %</th>
-  <th onclick="thSort('rytd')" data-col="rytd">YTD %</th>
-  <th onclick="thSort('r1y')" data-col="r1y">1Y %</th>
-  <th onclick="thSort('r2y')" data-col="r2y">2Y %</th>
+  <th onclick="thSort('r1d')" data-col="r1d" class="sort-desc" style="text-align:right">1D %</th>
+  <th onclick="thSort('r2d')" data-col="r2d" style="text-align:right">2D %</th>
+  <th onclick="thSort('r3d')" data-col="r3d" style="text-align:right">3D %</th>
+  <th onclick="thSort('r4d')" data-col="r4d" style="text-align:right">4D %</th>
+  <th onclick="thSort('r1w')" data-col="r1w" style="text-align:right">1W %</th>
+  <th onclick="thSort('r1m')" data-col="r1m" style="text-align:right">1M %</th>
+  <th onclick="thSort('r3m')" data-col="r3m" style="text-align:right">3M %</th>
+  <th onclick="thSort('r6m')" data-col="r6m" style="text-align:right">6M %</th>
+  <th onclick="thSort('rytd')" data-col="rytd" style="text-align:right">YTD %</th>
+  <th onclick="thSort('r1y')" data-col="r1y" style="text-align:right">1Y %</th>
+  <th onclick="thSort('r2y')" data-col="r2y" style="text-align:right">2Y %</th>
 </tr></thead><tbody id="thBody"></tbody></table></div></div>
 <div class="pagination" id="thPag"></div>
 </div>
@@ -2931,10 +3760,12 @@ body.refined .ind-menu-btn:hover {
 <div class="controls">
   <button class="rot-mode-btn active" id="rotModeSectors2" onclick="rotSetModeOuter('sectors',this)">Sectors</button>
   <button class="rot-mode-btn" id="rotModeCross2" onclick="rotSetModeOuter('crossAsset',this)">Cross-Asset</button>
+  <button class="rot-mode-btn" id="rotModeThemes2" onclick="rotSetModeOuter('themes',this)">Themes</button>
   <div class="ctrl-sep"></div>
   <button class="th-cat-btn" onclick="tabRefresh('rotation',this)" title="Reload rotation chart">↻ Refresh</button>
   <span class="tab-refresh-ts" id="rotRefreshTs"></span>
 </div>
+<div id="rotQBar" class="rot-qbar" style="display:none"></div>
 <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
   <div class="rot-frame-wrap">
     <iframe id="rotationFrame" class="rot-frame" title="Rotation"></iframe>
@@ -3105,18 +3936,6 @@ body.refined .ind-menu-btn:hover {
   <div class="ctrl-sep"></div>
   <span class="ctrl-label">Min Insiders</span>
   <input id="iMinIns" class="ctrl-input" type="number" min="1" max="20" value="1" style="width:58px" title="Min distinct insiders" oninput="iFilter()">
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Buy Period</span>
-  <select id="iWinDaysSelect" class="ctrl-input" onchange="iWinDaysFromSelect();iFilter()">
-    <option value="7">1 week</option>
-    <option value="14">2 weeks</option>
-    <option value="30" selected>1 month</option>
-    <option value="90">3 months</option>
-    <option value="180">6 months</option>
-    <option value="365">1 year</option>
-    <option value="730">2 years</option>
-  </select>
-  <input id="iWinDays" type="hidden" value="30">
   <div style="flex-basis:100%;height:0"></div>
   <div class="result-count" id="iCnt" style="padding:0;align-self:center;margin-right:10px"></div>
   <button class="th-cat-btn" onclick="tabRefresh('insider',this)" title="Reload insider data">↻ Refresh</button>
@@ -3360,6 +4179,20 @@ const _tabRefreshBusy = {};   // tab key → bool
     }
   } catch(_e) {}
 })();
+
+// -- Unified UI-state persistence (gekko_ui_state_v1) --
+// Single key for all per-tab control state that isn't covered by other keys.
+const _UI_STATE_KEY = 'gekko_ui_state_v1';
+function _uiStateSave(patch) {
+  try {
+    const cur = JSON.parse(localStorage.getItem(_UI_STATE_KEY) || '{}');
+    localStorage.setItem(_UI_STATE_KEY, JSON.stringify(Object.assign(cur, patch)));
+  } catch(_e) {}
+}
+function _uiStateLoad() {
+  try { return JSON.parse(localStorage.getItem(_UI_STATE_KEY) || '{}'); } catch(_e) { return {}; }
+}
+
 function _tabTsId(tab) {
   const map = {
     'themes':        'thRefreshTs',
@@ -3442,9 +4275,8 @@ async function tabRefresh(tab, btn) {
       _setRefreshBusy('heatmap-themes', true);
       await fetch('/api/themes/rebuild').catch(()=>{});
       await ensureThemesData(true);
+      _updateRefreshTs('heatmap-themes');
       hmPopulateCats(); renderHeatmap();
-      _setRefreshBusy('heatmap-themes', false);
-      // timestamp is set inside _applyThemesData
     } else if (tab === 'heatmap-sp500') {
       // Force-refresh all SP500 + majors OHLCV then rebuild
       _setRefreshBusy('heatmap-sp500', true);
@@ -3492,7 +4324,7 @@ async function tabRefresh(tab, btn) {
       await fetch('/api/bubble/rebuild').catch(()=>{});
       CONV.length = 0; INSIDERS.length = 0;
       await Promise.allSettled([ensureConvictionData(true), ensureInsidersData(true), ensureBubbleSizeData(true)]);
-      updateBubbleChartDataset();
+      bcUpdate();
       _updateRefreshTs('bubble');
     } else if (tab === 'zreturns') {
       _setRefreshBusy('zreturns', true);
@@ -3668,11 +4500,9 @@ function _applyThemesData(rows, sourceUpdatedAtIso=''){
   if (srcTs) {
     _themesLastLoadedAt = srcTs;
     _updateRefreshTs('themes', new Date(srcTs));
-    _updateRefreshTs('heatmap-themes', new Date(srcTs));
   } else if (THEMES_DATA.length) {
     _themesLastLoadedAt = Date.now();
     _updateRefreshTs('themes');
-    _updateRefreshTs('heatmap-themes');
   }
 }
 
@@ -4244,7 +5074,11 @@ async function blEnsureTickerChartData(sym, force=false){
   if(!sym) return;
   const key=String(sym||'').trim().toUpperCase();
   if(!key) return;
-  if(!force&&_blChartDataHasCoreLoaded(key)&&_blChartDataHasOverlaysLoaded(key)&&!_blChartDataStale(key)) return;
+  // Cache-first: only fetch if the data is genuinely missing (no GI history,
+  // no zone returns, or no reversals for this ticker). Staleness no longer
+  // triggers a re-fetch on click — the auto-refresh timer is the sole driver
+  // of refreshes after the initial load.
+  if(!force&&_blChartDataHasCoreLoaded(key)&&_blChartDataHasOverlaysLoaded(key)) return;
   if(_blChartDataFetching[key]){ await _blChartDataFetching[key]; return; }
 
   // Priority order:
@@ -4482,8 +5316,6 @@ function blApplySavedControlState(){
   blSyncIndicatorChecks();
   blSyncChartTypeUI();
   gispSyncPositionSizerInputs();
-  // Keep iWinDays in sync whenever blLookback is programmatically updated
-  iApplyLookbackFromMovedControl();
 }
 function blPullSavedControlState(){
   const period=parseInt(document.getElementById('blChartPeriod')?.value);
@@ -4560,6 +5392,20 @@ function _applyBuyLevelsCfg(cfg){
     if (typeof cfg.vwap_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.vwap_color)) _blVwapColor=cfg.vwap_color;
     if (typeof cfg.ma50_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.ma50_color)) _blMA50Color=cfg.ma50_color;
     if (typeof cfg.ma200_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.ma200_color)) _blMA200Color=cfg.ma200_color;
+    if (typeof cfg.log_scale === 'boolean') _blLogScale = cfg.log_scale;
+    if (typeof cfg.show_trendlines === 'boolean') _blShowTrendlines = cfg.show_trendlines;
+    if (typeof cfg.show_broken_trendlines === 'boolean') _blShowBrokenTrendlines = cfg.show_broken_trendlines;
+    if (typeof cfg.trend_weight_by_score === 'boolean') _blTrendWeightByScore = cfg.trend_weight_by_score;
+    if (Number.isFinite(Number(cfg.trend_weight_scale))) _blTrendWeightScale = clampNum(Math.round(Number(cfg.trend_weight_scale)),10,100);
+    if (Number.isFinite(Number(cfg.trend_pivot_k))) _blTrendPivotK = clampNum(Math.round(Number(cfg.trend_pivot_k)),2,20);
+    if (typeof cfg.trend_down_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.trend_down_color)) _blTrendDownColor=cfg.trend_down_color;
+    if (typeof cfg.trend_up_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.trend_up_color)) _blTrendUpColor=cfg.trend_up_color;
+    if (typeof cfg.trend_broken_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.trend_broken_color)) _blTrendBrokenColor=cfg.trend_broken_color;
+    if (typeof cfg.show_sr_lines === 'boolean') _blShowSRLines = cfg.show_sr_lines;
+    if (Number.isFinite(Number(cfg.sr_sensitivity))) _blSRSensitivity = clampNum(Math.round(Number(cfg.sr_sensitivity)),1,19);
+    if (typeof cfg.sr_color==='string'&&/^#[0-9a-fA-F]{6}$/.test(cfg.sr_color)) _blSRColor=cfg.sr_color;
+    if (typeof cfg.sr_weight_by_touches === 'boolean') _blSRWeightByTouches = cfg.sr_weight_by_touches;
+    if (Number.isFinite(Number(cfg.sr_weight_scale))) _blSRWeightScale = clampNum(Math.round(Number(cfg.sr_weight_scale)),10,100);
     if (!Object.prototype.hasOwnProperty.call(BL_CHART_COLOR_LABELS, chartColorMode) && typeof cfg.show_prev_close_colors === 'boolean') {
       _blChartColorMode = cfg.show_prev_close_colors ? 'change' : 'open';
     }
@@ -4645,6 +5491,20 @@ function saveBuyLevelsPrefs(){
       vwap_color: _blVwapColor,
       ma50_color: _blMA50Color,
       ma200_color: _blMA200Color,
+      log_scale: !!_blLogScale,
+      show_trendlines: !!_blShowTrendlines,
+      show_broken_trendlines: !!_blShowBrokenTrendlines,
+      trend_weight_by_score: !!_blTrendWeightByScore,
+      trend_weight_scale: _blTrendWeightScale,
+      trend_pivot_k: _blTrendPivotK,
+      trend_down_color: _blTrendDownColor,
+      trend_up_color: _blTrendUpColor,
+      trend_broken_color: _blTrendBrokenColor,
+      show_sr_lines: !!_blShowSRLines,
+      sr_sensitivity: _blSRSensitivity,
+      sr_color: _blSRColor,
+      sr_weight_by_touches: !!_blSRWeightByTouches,
+      sr_weight_scale: _blSRWeightScale,
       risk_mode: _blSizerRiskMode,
       manual_stop: _blSizerManualStop,
       atr_mult: _blSizerAtrMult,
@@ -5761,6 +6621,89 @@ function sendRotationMode(mode){
   const frame=document.getElementById('rotationFrame');
   try{ if(frame && frame.contentWindow) frame.contentWindow.postMessage({type:'rotation-mode',mode}, '*'); }catch(_e){}
 }
+
+(function(){
+  const QBAR_ORDER = ['leading','improving','weakening','lagging'];
+  const QBAR_INFO = {
+    leading:   { label:'LEADING',   hex:'#43a248' },
+    improving: { label:'IMPROVING', hex:'#4a78bc' },
+    weakening: { label:'WEAKENING', hex:'#ab8d28' },
+    lagging:   { label:'LAGGING',   hex:'#b14f4f' },
+  };
+  const _qbarExpanded = {};
+  const _qbarData = {};
+
+  function _qbarChipHTML(t){
+    return `<span class="rot-qbar-tk" data-tk="${t.ticker}"><span class="brk" style="color:${t.color}">[</span><span class="tk-lbl">${t.ticker}</span><span class="brk" style="color:${t.color}">]</span></span>`;
+  }
+
+  function _qbarRenderTickers(q, strip){
+    const {top, all} = _qbarData[q];
+    const expanded = _qbarExpanded[q];
+    const tickers = expanded ? all : top;
+    const overflow = all.length - top.length;
+    let html = tickers.map(_qbarChipHTML).join('');
+    if (overflow > 0){
+      html += expanded
+        ? `<span class="rot-qbar-more" data-qmore="${q}">− less</span>`
+        : `<span class="rot-qbar-more" data-qmore="${q}">+${overflow}</span>`;
+    }
+    strip.innerHTML = html;
+  }
+
+  window.addEventListener('message', function(evt){
+    if (!evt.data) return;
+    if (evt.data.type === 'rotation-open-chart' && evt.data.ticker) { goChart(evt.data.ticker); return; }
+    if (evt.data.type !== 'rotation-qbar') return;
+    const bar = document.getElementById('rotQBar');
+    if (!bar) return;
+    const buckets = evt.data.buckets || {};
+    bar.innerHTML = '';
+    QBAR_ORDER.forEach(q => {
+      const info = QBAR_INFO[q];
+      const bucket = buckets[q] || {};
+      const count = bucket.count ?? 0;
+      const top   = bucket.top  ?? [];
+      const all   = bucket.all  ?? top;
+      _qbarData[q] = { top, all };
+      const cell = document.createElement('div');
+      cell.className = 'rot-qbar-cell';
+      const strip = document.createElement('div');
+      strip.className = 'rot-qbar-tickers';
+      strip.dataset.qstrip = q;
+      cell.innerHTML = `<div style="display:flex;flex-direction:row;align-items:center;gap:7px">
+        <span class="rot-qbar-count">${count}</span>
+        <span class="rot-qbar-label" style="color:${info.hex}">${info.label}</span>
+      </div>`;
+      cell.appendChild(strip);
+      _qbarRenderTickers(q, strip);
+      bar.appendChild(cell);
+    });
+    bar.style.display = 'flex';
+  });
+
+  document.addEventListener('click', function(e){
+    const more = e.target.closest('[data-qmore]');
+    if (more) {
+      const q = more.dataset.qmore;
+      _qbarExpanded[q] = !_qbarExpanded[q];
+      const strip = document.querySelector(`.rot-qbar-tickers[data-qstrip="${q}"]`);
+      if (strip) _qbarRenderTickers(q, strip);
+      return;
+    }
+    const chip = e.target.closest('.rot-qbar-tk[data-tk]');
+    if (chip) {
+      const tk = chip.dataset.tk;
+      const f = document.getElementById('rotationFrame');
+      try { f && f.contentWindow && f.contentWindow.postMessage({type:'rotation-focus', ticker:tk}, '*'); } catch(_e){}
+    }
+  });
+
+  document.addEventListener('dblclick', function(e){
+    const chip = e.target.closest('.rot-qbar-tk[data-tk]');
+    if (chip) goChart(chip.dataset.tk);
+  });
+})();
 function _findTabButton(name){
   const buttons=[...document.querySelectorAll('.tab-btn')];
   return buttons.find(b=>{
@@ -5793,6 +6736,7 @@ function rotSetModeOuter(mode,btn){
   document.querySelectorAll('#tab-rotation .rot-mode-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   sendRotationMode(mode);
+  try{ localStorage.setItem('gekko_rot_mode_v1', mode); }catch(_e){}
 }
 function loadRotationFrame(){
   const frame=document.getElementById('rotationFrame');
@@ -5806,7 +6750,10 @@ function loadRotationFrame(){
     if(msg)msg.style.display='none';
     // Set timestamp on first-ever load; after browser F5 the localStorage value is already restored
     if(!_tabRefreshTs['rotation']) _updateRefreshTs('rotation');
-    sendRotationMode(document.getElementById('rotModeCross2')?.classList.contains('active')?'crossAsset':'sectors');
+    let mode='sectors';
+    if(document.getElementById('rotModeCross2')?.classList.contains('active')) mode='crossAsset';
+    else if(document.getElementById('rotModeThemes2')?.classList.contains('active')) mode='themes';
+    sendRotationMode(mode);
   },{once:true});
   frame.addEventListener('error',function(){
     frame.dataset.loaded='';
@@ -5866,6 +6813,8 @@ function ensureTabReady(name){
     if(TAB_INIT.zreturns) return;
     TAB_INIT.zreturns=1;
     _renderRefreshTs('zreturns');
+    // Restore saved GI Returns filters
+    (function(){try{const s=_uiStateLoad();if(s.zrZone!==undefined){const el=document.getElementById('zrZone');if(el)el.value=s.zrZone;}if(s.zrMinN!==undefined){const el=document.getElementById('zrMinN');if(el)el.value=s.zrMinN;}if(s.zrIBPeriod!==undefined){const el=document.getElementById('zrIBPeriod');if(el)el.value=s.zrIBPeriod;}}catch(_e){}})();
     zrFilter();
     return;
   }
@@ -5916,6 +6865,15 @@ function ensureTabReady(name){
   }
   if(name==='themes'){
     TAB_INIT.themes = 1;
+    // Restore saved themes category button
+    (function(){try{
+      const s=_uiStateLoad();
+      if(s.thCat!==undefined){
+        const btns=document.querySelectorAll('#tab-themes .th-cat-btn');
+        btns.forEach(b=>b.classList.remove('active'));
+        btns.forEach(b=>{const oc=b.getAttribute('onclick')||'';if(oc.includes(`thSetCat('${s.thCat}'`))b.classList.add('active');});
+      }
+    }catch(_e){}})();
     if (THEMES_DATA.length > 0) {
       thFilter();
     } else {
@@ -5932,6 +6890,25 @@ function ensureTabReady(name){
   if(name==='heatmap'){
     if(!TAB_INIT.heatmap){
       TAB_INIT.heatmap=1;
+      // Sync view button to match the preference loaded from localStorage
+      document.querySelectorAll('#tab-heatmap .th-cat-btn[id^="hmView"]').forEach(b=>b.classList.remove('active'));
+      const _hmViewBtn=document.getElementById(_hmView==='sp500'?'hmViewSP500':_hmView==='majors'?'hmViewMajors':'hmViewThemes');
+      if(_hmViewBtn)_hmViewBtn.classList.add('active');
+      // Restore saved metric + layout buttons
+      (function(){try{
+        const s=_uiStateLoad();
+        if(s.hmMetric){
+          document.querySelectorAll('#tab-heatmap .th-cat-btn[id^="hmM"]').forEach(b=>b.classList.remove('active'));
+          const mb=document.querySelector(`#tab-heatmap [onclick*="hmSetMetric('${s.hmMetric}'"]`);
+          if(mb) mb.classList.add('active');
+        }
+        if(s.hmLayout){
+          document.querySelectorAll('#tab-heatmap .th-cat-btn[id^="hmTh"]').forEach(b=>b.classList.remove('active'));
+          const lb=document.querySelector(`#tab-heatmap [onclick*="hmSetThLayout('${s.hmLayout}'"]`);
+          if(lb) lb.classList.add('active');
+        }
+      }catch(_e){}})();
+      hmSyncControls();
       hmPopulateCats();
     }
     if (_hmView==='sp500') {
@@ -5960,18 +6937,19 @@ function ensureTabReady(name){
   if(name==='bubble'){
     TAB_INIT.bubble=1;
     _renderRefreshTs('bubble');
-    mountBubbleChartV2();
-    if(CONV.length){
-      updateBubbleChartDataset();
+    bcMount();
+    if (CONV.length) {
+      bcUpdate();
     } else {
       _bubbleShowOverlay('Loading…');
       Promise.all([
         ensureConvictionData(false).catch(()=>{}),
         ensureInsidersData(false).catch(()=>{}),
-        ensureBubbleSizeData(false).catch(()=>{})
+        ensureBubbleSizeData(false).catch(()=>{}),
+        ensureHoldingsData(false).catch(()=>{})
       ]).then(()=>{
         if(document.getElementById('tab-bubble')?.classList.contains('active')){
-          if(CONV.length){ _bubbleHideOverlay(); updateBubbleChartDataset(); }
+          if(CONV.length){ _bubbleHideOverlay(); bcUpdate(); }
           else _bubbleShowOverlay('Click ↻ Refresh to load bubble chart data.');
         }
       });
@@ -6015,22 +6993,20 @@ function goChart(ticker){
   try{ renderWatchlist(); }catch(_e){}
 }
 
-function giBadge(score,tier){
+function giBadge(score, tier){
   if(score===null||score===undefined) return '<span style="color:var(--muted)">-</span>';
-  const col=GIC[tier]||'#7a8fa8';
-  const pct=Math.min(100,Math.max(0,Math.round(score)));
-  const r=parseInt(col.slice(1,3),16)||0;
-  const g=parseInt(col.slice(3,5),16)||0;
-  const b=parseInt(col.slice(5,7),16)||0;
-  const fade=`rgba(${r},${g},${b},0.28)`;
-  const glow=`rgba(${r},${g},${b},0.55)`;
-  // inline-flex keeps the badge tight to its content; <td text-align:right floats it right
-  return `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle">`
-    +`<span style="color:${col};font-weight:700;font-family:var(--mono);font-size:13px;min-width:22px;text-align:right;letter-spacing:-.01em">${score.toFixed(0)}</span>`
-    +`<span style="display:inline-block;width:56px;height:8px;background:rgba(255,255,255,.055);border-radius:4px;overflow:hidden;flex-shrink:0;box-shadow:inset 0 1px 3px rgba(0,0,0,.6)">`
-      +`<span style="display:block;width:${pct}%;height:100%;background:linear-gradient(90deg,${fade} 0%,${col} 100%);border-radius:4px;box-shadow:0 1px 5px 0 ${glow}"></span>`
-    +`</span>`
-    +`</span>`;
+  const col = GIC[tier] || '#7a8fa8';
+  const n = Math.round(score);
+  const lit = Math.max(0, Math.min(5, Math.round((n/80)*5)));
+  let segs = '';
+  for (let i = 0; i < 5; i++){
+    const on = i < lit;
+    segs += `<span style="display:inline-block;width:5px;height:9px;border-radius:1.5px;margin-right:2px;background:${on?col:'rgba(255,255,255,.08)'};${on?`box-shadow:0 0 4px ${col}55`:''}"></span>`;
+  }
+  return `<span style="display:inline-flex;align-items:center;gap:7px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.06);vertical-align:middle">`
+    + `<span style="color:${col};font-weight:700;font-family:var(--mono);font-size:12px;letter-spacing:-.01em;min-width:18px;text-align:right">${n}</span>`
+    + `<span style="display:inline-flex;align-items:center;line-height:0">${segs}</span>`
+    + `</span>`;
 }
 function chgBadge(ct,pct){
   if(ct==='NEW')  return '<span class="badge b-new">NEW</span>';
@@ -6277,6 +7253,11 @@ document.addEventListener('scroll',e=>{
 const symChartTipEl=document.createElement('div');
 symChartTipEl.className='sym-chart-popup';
 document.body.appendChild(symChartTipEl);
+// Close immediately when the cursor exits the popup rectangle.
+// This is the primary close path — once the TradingView iframe loads it
+// captures mouse events so document-level mousemove/mouseout become
+// unreliable; mouseleave on the container itself is always reliable.
+symChartTipEl.addEventListener('mouseleave', ()=>hideSymbolMiniChart());
 let _symChartHideTimer=null,_symChartLoadTimer=null,_symChartTicker='',_symChartAnchor=null,_symChartMouseEvt=null;
 function _symChartCancelHide(){ clearTimeout(_symChartHideTimer); _symChartHideTimer=null; }
 function _symChartScheduleHide(){ hideSymbolMiniChart(); }
@@ -6388,7 +7369,9 @@ document.addEventListener('mouseout',e=>{
 });
 document.addEventListener('mousemove',e=>{
   _symChartMouseEvt=e;
-  if(symChartTipEl.classList.contains('show')) _symChartPosition(symChartTipEl,e);
+  // Do NOT reposition once the popup is visible — keeping it stationary lets
+  // mouseleave fire at a well-defined edge.  Position is snapped once in
+  // loadMiniChart() before the chart content is injected.
 });
 document.addEventListener('scroll',()=>{ if(symChartTipEl.classList.contains('show')) hideSymbolMiniChart(); },true);
 
@@ -6424,7 +7407,7 @@ function showHmMiniChart(ticker,exchange,e){
   mc.setAttribute('theme','dark');
   /* Make the widget taller than the container so overflow:hidden clips the
      "price by TradingView" footer (≈28px) at the bottom of the iframe. */
-  mc.style.cssText='width:100%;height:252px;display:block;margin-top:-2px;';
+  mc.style.cssText='width:100%;height:220px;display:block;margin-top:-2px;';
   hmMiniPopEl.appendChild(mc);
   hmMiniPopEl.classList.add('show');
   _hmMiniPosition(e);
@@ -6666,8 +7649,6 @@ function _mgrInitManagerDropdown(){
 function mgrFilter(){
   const q=document.getElementById('mgrS').value.trim().toLowerCase();
   const mgr=document.getElementById('mgrMgr').value;
-  const ch=document.getElementById('mgrCh').value;
-  const gi=document.getElementById('mgrGI').value;
   const mm=parseInt(document.getElementById('mgrMM').value)||1;
   const minIns=parseInt(document.getElementById('mgrMinIns')?.value)||0;
   const ibDays=parseInt(document.getElementById('mgrIBPeriod')?.value)||0;
@@ -6675,8 +7656,6 @@ function mgrFilter(){
   mgrSt.filtered=HOLDINGS.filter(r=>{
     if(mgr&&r.manager!==mgr) return false;
     if(q&&!r.ticker.toLowerCase().includes(q)&&!(r.company||'').toLowerCase().includes(q)) return false;
-    if(ch&&r.change_type!==ch) return false;
-    if(gi&&r.gi_tier!==gi) return false;
     return true;
   });
   doSort(mgrSt); mgrSt.pg=1;
@@ -6799,11 +7778,11 @@ function renderMgr(){
       <td class="muted" style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${g.company||''}">${g.company||'-'}</td>
       <td style="color:var(--green)">${g.value_fmt}</td>
       <td>${hoverCount(g.managerCount,'var(--green)',g.mgrTip||g.mgrs,'mgr')}</td>
-      <td style="text-align:center">${giBadge(g.gi_score,g.gi_tier)}</td>
       <td>${newCount>0?hoverCount(newCount,'#86efac',newTip,'new'):'-'}</td>
       <td>${incCount>0?hoverCount(incCount,'#60a5fa',incTip,'inc'):'-'}</td>
       <td>${decCount>0?hoverCount(decCount,'#f87171',decTip,'dec'):'-'}</td>
       <td>${insiderBuysCount>0?hoverCount(insiderBuysCount,'#fbbf24',insTip,'ins'):'-'}</td>
+      <td style="text-align:center">${giBadge(g.gi_score,g.gi_tier)}</td>
     </tr>`;
     if(g._open){
       g._rows.forEach(r=>{
@@ -6811,8 +7790,8 @@ function renderMgr(){
           <td class="muted" style="font-size:10px;padding-left:14px" colspan="2">${managerCell(r)}</td>
           <td style="color:var(--green)">${r.value_fmt}</td>
           <td class="muted">${r.pct!=null?r.pct.toFixed(2)+'%<div class="pct-bar"><div class="pct-bar-fill" style="width:'+Math.min(r.pct,100).toFixed(1)+'%"></div></div>':'-'}</td>
-          <td style="text-align:center">${giBadge(r.gi_score,r.gi_tier)}</td>
           <td colspan="4" style="text-align:left;padding-left:8px">${holdingsChgBadge([{ct:r.change_type,pct:r.share_chg_pct}],[])}</td>
+          <td style="text-align:center">${giBadge(r.gi_score,r.gi_tier)}</td>
         </tr>`;
       });
     }
@@ -7017,127 +7996,246 @@ function renderBubble(){
       },
       scales:{
         x:{title:{display:true,text:'Number of Managers Holding',color:UI.muted,font:{family:'JetBrains Mono',size:11}},
-           grid:{color:'rgba(255,255,255,0.03)'},ticks:{color:UI.muted,font:{family:'JetBrains Mono'}},min:xMin,max:xMax},
+           grid:{color:'rgba(255,255,255,0.03)'},
+           afterBuildTicks(scale){
+             scale.ticks=scale.ticks
+               .filter(t=>Math.abs(t.value-Math.round(t.value))<0.001)
+               .map(t=>({...t,value:Math.round(t.value)}));
+           },
+           ticks:{color:UI.muted,font:{family:'JetBrains Mono'},
+             callback(v){return Math.round(v);}},
+           min:xMin,max:xMax},
         y:{title:{display:true,text:'GI Score',color:UI.muted,font:{family:'JetBrains Mono',size:11}},
-           grid:{color:'rgba(255,255,255,0.03)'},ticks:{color:UI.muted,font:{family:'JetBrains Mono'}},min:yMin,max:yMax},
+           grid:{color:'rgba(255,255,255,0.03)'},
+           afterBuildTicks(scale){
+             scale.ticks=scale.ticks
+               .filter(t=>Math.abs(t.value-Math.round(t.value))<0.001)
+               .map(t=>({...t,value:Math.round(t.value)}));
+           },
+           ticks:{color:UI.muted,font:{family:'JetBrains Mono'},
+             callback(v){return Math.round(v);}},
+           min:yMin,max:yMax},
       },
     },
   });
   bubbleSavePrefs();
 }
 
-// ---- Bubble Chart v2 globals ----
-window.SECTOR_COLORS={
-  'Technology':'#7AA2F7','Financial':'#E0AF68','Healthcare':'#9ECE6A',
-  'Consumer':'#F7768E','Energy':'#FF9E64','Industrials':'#BB9AF7',
-  'Communication':'#7DCFFF','Utilities':'#73DACA','Real Estate':'#B4B4B4','Materials':'#C0CAF5'
+// ==== Bubble Chart v2 — globals, dataset builder, lazy loader ====
+// Canonical sector names (Yahoo/yfinance style). Always reassigned — no || guard
+// so stale cached definitions never persist across deploys.
+window.SECTOR_COLORS = {
+  'Technology':             '#7AA2F7',
+  'Communication Services': '#7DCFFF',
+  'Financial Services':     '#E0AF68',
+  'Healthcare':             '#9ECE6A',
+  'Consumer Cyclical':      '#F7768E',
+  'Consumer Defensive':     '#FF9E64',
+  'Industrials':            '#BB9AF7',
+  'Energy':                 '#F0883E',
+  'Real Estate':            '#B4B4B4',
+  'Basic Materials':        '#C0CAF5',
+  'Utilities':              '#73DACA',
+  'Other':                  '#666666',
 };
-window.fmtMoney=function(v){
-  if(v==null||!isFinite(v))return'—';
-  if(v>=1e12)return'$'+(v/1e12).toFixed(2)+'T';
-  if(v>=1e9)return'$'+(v/1e9).toFixed(2)+'B';
-  if(v>=1e6)return'$'+(v/1e6).toFixed(1)+'M';
-  if(v>=1e3)return'$'+(v/1e3).toFixed(0)+'K';
-  return'$'+Math.round(v);
+// Explicit alias map: covers every common alternative name from Yahoo Finance,
+// yfinance, Supabase screeners, and other data providers. Keyed by lowercase alias,
+// value is the canonical SECTOR_COLORS key.
+window._SECTOR_ALIASES = {
+  // Technology
+  'information technology':     'Technology',
+  'tech':                       'Technology',
+  // Communication Services
+  'communication':              'Communication Services',
+  'communications':             'Communication Services',
+  'telecommunication services': 'Communication Services',
+  'telecom':                    'Communication Services',
+  'media':                      'Communication Services',
+  // Financial Services
+  'financials':                 'Financial Services',
+  'financial':                  'Financial Services',
+  'finance':                    'Financial Services',
+  // Healthcare
+  'health care':                'Healthcare',
+  'health':                     'Healthcare',
+  'pharmaceuticals':            'Healthcare',
+  'biotech':                    'Healthcare',
+  'biotechnology':              'Healthcare',
+  // Consumer Cyclical
+  'consumer discretionary':     'Consumer Cyclical',
+  'consumer cyclicals':         'Consumer Cyclical',
+  'discretionary':              'Consumer Cyclical',
+  // Consumer Defensive
+  'consumer staples':           'Consumer Defensive',
+  'staples':                    'Consumer Defensive',
+  'consumer defensives':        'Consumer Defensive',
+  // Industrials
+  'industrial':                 'Industrials',
+  'aerospace & defense':        'Industrials',
+  // Basic Materials
+  'materials':                  'Basic Materials',
+  'basic material':             'Basic Materials',
+  // Real Estate
+  'realestate':                 'Real Estate',
+  'real-estate':                'Real Estate',
+  'reit':                       'Real Estate',
+  'reits':                      'Real Estate',
+  // Utilities
+  'utility':                    'Utilities',
+  // Energy
+  'oil & gas':                  'Energy',
+  'oil and gas':                'Energy',
 };
-window.fmtPct=function(v){
-  if(v==null||!isFinite(v))return'—';
-  return(v>0?'+':'')+v.toFixed(1)+'%';
+// Hash any string to a stable HSL color so truly unknown sectors still get a distinct color.
+window._bcHashColor = function(s){
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  return 'hsl(' + hue + ', 62%, 64%)';
 };
-window.giColor=function(v){
-  if(v==null)return'#777';
-  if(v>=75)return'#22c55e';
-  if(v>=60)return'#86efac';
-  if(v>=45)return'#facc15';
-  if(v>=33)return'#f97316';
-  return'#ef4444';
+// Normalize a raw sector string to its canonical SECTOR_COLORS key.
+// Always reassigned — no || guard.
+window.bcSectorKey = function(s){
+  if (!s) return '';
+  const cm = window.SECTOR_COLORS;
+  // 1. Exact match
+  if (cm[s]) return s;
+  const norm = String(s).trim().toLowerCase();
+  // 2. Case-insensitive exact match
+  for (const k in cm) { if (k.toLowerCase() === norm) return k; }
+  // 3. Explicit alias map (covers Financials, Consumer Discretionary, Health Care, etc.)
+  if (window._SECTOR_ALIASES[norm]) return window._SECTOR_ALIASES[norm];
+  // 4. Alias map prefix: e.g. "consumer disc" still maps to Consumer Cyclical
+  for (const alias in window._SECTOR_ALIASES) {
+    if (norm.startsWith(alias) || alias.startsWith(norm)) return window._SECTOR_ALIASES[alias];
+  }
+  // 5. Canonical prefix match (last resort — avoids the Consumer Cyclical/Defensive ambiguity
+  //    by only matching if exactly one canonical key is a prefix of norm, not the other way round)
+  let prefixMatch = null, prefixCount = 0;
+  for (const k in cm) {
+    const kl = k.toLowerCase();
+    if (norm.startsWith(kl)) { prefixMatch = k; prefixCount++; }
+  }
+  if (prefixCount === 1) return prefixMatch;
+  // 6. Unknown — return raw so the bubble still renders (hash color) but won't match any filter
+  return s;
 };
-function _bcGiTier(gi){
-  if(gi>=75)return'dark-green';
-  if(gi>=60)return'green';
-  if(gi>=45)return'yellow';
-  if(gi>=33)return'orange';
-  return'red';
+// Color lookup — always uses canonical key first, falls back to hash for truly unknown sectors.
+window.bcSectorColor = function(s){
+  if (!s) return '#777';
+  const key = window.bcSectorKey(s);
+  return window.SECTOR_COLORS[key] || window._bcHashColor(String(key).trim().toLowerCase());
+};
+window.fmtMoney = window.fmtMoney || function(v){
+  if (v==null || !isFinite(v)) return '—';
+  if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T';
+  if (v>=1e9)  return '$'+(v/1e9).toFixed(2)+'B';
+  if (v>=1e6)  return '$'+(v/1e6).toFixed(1)+'M';
+  if (v>=1e3)  return '$'+(v/1e3).toFixed(0)+'K';
+  return '$'+Math.round(v);
+};
+window.fmtPct = window.fmtPct || function(v){
+  if (v==null || !isFinite(v)) return '—';
+  return (v>0?'+':'')+v.toFixed(1)+'%';
+};
+window.giColor = window.giColor || function(v){
+  if (v==null) return '#777';
+  if (v>=75) return '#22c55e';
+  if (v>=60) return '#86efac';
+  if (v>=45) return '#facc15';
+  if (v>=33) return '#f97316';
+  return '#ef4444';
+};
+function _bcTier(gi){
+  if (gi>=75) return 'dark-green'; if (gi>=60) return 'green';
+  if (gi>=45) return 'yellow';     if (gi>=33) return 'orange';
+  return 'red';
 }
-window.DATASET=[];
-function buildBubbleDataset(){
-  const rows=CONV.map(r=>{
-    const bsd=BUBBLE_SIZE_DATA[String(r.ticker||'').toUpperCase()]||{};
-    const ibDistinct=countDistinctInsiderBuys(r.ticker,0);
-    const ibValue=sumInsiderBuyValue(r.ticker,0);
-    const sector=bsd.sector||r.sector||'';
-    return{
-      ticker:r.ticker,
-      company:r.company||BL_TICKER_INFO[r.ticker]||'',
-      sector,
-      gi_score:r.gi_score!=null?+r.gi_score:null,
-      gi_tier:r.gi_tier||_bcGiTier(r.gi_score||0),
-      manager_count:r.manager_count||0,
-      new_count:r.new_count||0,
-      total_value:Math.max(0,Number(r.total_value)||0),
-      new_value:Math.max(0,Number(r.new_value)||0),
-      insider_buys_distinct:ibDistinct,
-      insider_buys_value:ibValue,
-      chg_30d:null,
-      chg_90d:null,
+function bcBuildDataset(){
+  return CONV.map(r=>{
+    const tk = String(r.ticker||'').toUpperCase();
+    const bsd = (typeof BUBBLE_SIZE_DATA==='object' && BUBBLE_SIZE_DATA[tk]) || {};
+    const rawSector = bsd.sector || r.sector || '';
+    return {
+      ticker: r.ticker,
+      company: r.company || (typeof BL_TICKER_INFO==='object' ? BL_TICKER_INFO[r.ticker] : '') || '',
+      sector: window.bcSectorKey(rawSector),
+      gi_score: r.gi_score!=null ? +r.gi_score : null,
+      gi_tier: r.gi_tier || _bcTier(+r.gi_score||0),
+      manager_count: r.manager_count||0,
+      new_count: r.new_count||0,
+      total_value: Math.max(0, Number(r.total_value)||0),
+      new_value: Math.max(0, Number(r.new_value)||0),
+      insider_buys_distinct: (typeof countDistinctInsiderBuys==='function') ? countDistinctInsiderBuys(r.ticker, 0) : 0,
+      insider_buys_value:    (typeof sumInsiderBuyValue==='function')    ? sumInsiderBuyValue(r.ticker, 0)    : 0,
     };
-  }).filter(r=>r.gi_score!=null);
-  return rows;
+  }).filter(r => r.gi_score != null);
 }
-let _bcRoot=null;
-let _bcScriptsLoaded=false;
-let _bcScriptsPromise=null;
+let _bcRoot = null, _bcMounting = false, _bcLoaded = false, _bcLoadingPromise = null;
 function _bcLoadScript(src){
-  return new Promise((resolve,reject)=>{
-    const s=document.createElement('script');
-    s.src=src; s.crossOrigin='anonymous';
-    s.onload=resolve;
-    s.onerror=()=>reject(new Error('Failed: '+src));
+  return new Promise((res, rej)=>{
+    const s = document.createElement('script');
+    s.src = src; s.crossOrigin = 'anonymous';
+    s.onload = res; s.onerror = ()=>rej(new Error('failed: '+src));
     document.head.appendChild(s);
   });
 }
-function _ensureBcScripts(){
-  if(_bcScriptsLoaded)return Promise.resolve();
-  if(_bcScriptsPromise)return _bcScriptsPromise;
-  _bcScriptsPromise=_bcLoadScript('https://unpkg.com/react@18.3.1/umd/react.production.min.js')
+function _bcEnsureScripts(){
+  if (_bcLoaded) return Promise.resolve();
+  if (_bcLoadingPromise) return _bcLoadingPromise;
+  _bcLoadingPromise = _bcLoadScript('https://unpkg.com/react@18.3.1/umd/react.production.min.js')
     .then(()=>_bcLoadScript('https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js'))
     .then(()=>_bcLoadScript('https://unpkg.com/@babel/standalone@7.29.0/babel.min.js'))
-    .then(()=>new Promise(r=>setTimeout(r,80))) // let Babel transform type="text/babel" scripts
-    .then(()=>{_bcScriptsLoaded=true;});
-  return _bcScriptsPromise;
+    .then(()=>{
+      // Babel only auto-runs on DOMContentLoaded. We loaded after that fired,
+      // so invoke the transformer manually for any <script type="text/babel"> tags.
+      try {
+        if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
+          window.Babel.transformScriptTags();
+        }
+      } catch (e) { console.error('bc: Babel.transformScriptTags failed', e); }
+      _bcLoaded = true;
+    });
+  return _bcLoadingPromise;
 }
-let _bcMounting=false;
-function mountBubbleChartV2(){
-  if(_bcRoot)return;
-  if(_bcMounting)return;
-  _bcMounting=true;
-  _bubbleShowOverlay('Loading chart…');
-  _ensureBcScripts().then(()=>{
-    const canvas=document.getElementById('chart');
-    if(!canvas||!window.BubbleChartApp){console.warn('bc: chart element or component missing');return;}
-    const host=canvas.parentElement;
-    canvas.remove();
-    const mount=document.createElement('div');
-    mount.id='bcReactRoot';
-    mount.style.cssText='position:absolute;inset:0';
-    host.appendChild(mount);
-    _bcRoot=ReactDOM.createRoot(mount);
-    _bcRoot.render(React.createElement(window.BubbleChartApp,{rows:window.DATASET}));
-    _bubbleHideOverlay();
-  }).catch(err=>{
-    console.error('bc: script load failed',err);
-    _bubbleShowOverlay('Chart failed to load. Check connection.');
-    _bcMounting=false;
+function _bcWaitForApp(timeoutMs){
+  // After Babel transforms, the inline script is appended as a new <script> and runs async.
+  // Poll until window.BubbleChartApp is set (or timeout).
+  return new Promise((resolve, reject)=>{
+    const start = Date.now();
+    (function tick(){
+      if (window.BubbleChartApp) return resolve();
+      if (Date.now() - start > timeoutMs) return reject(new Error('BubbleChartApp not registered after '+timeoutMs+'ms'));
+      setTimeout(tick, 50);
+    })();
   });
 }
-function updateBubbleChartDataset(){
-  const rows=buildBubbleDataset();
-  window.DATASET=rows;
-  if(_bcRoot){
-    _bcRoot.render(React.createElement(window.BubbleChartApp,{rows}));
-  }
+function bcMount(){
+  if (_bcRoot || _bcMounting) return;
+  _bcMounting = true;
+  _bubbleShowOverlay('Loading chart…');
+  _bcEnsureScripts()
+    .then(()=>_bcWaitForApp(8000))
+    .then(()=>{
+      const host = document.getElementById('bcReactRoot');
+      if (!host) { console.warn('bc: #bcReactRoot missing'); _bcMounting=false; _bubbleShowOverlay('Chart mount target missing.'); return; }
+      _bcRoot = ReactDOM.createRoot(host);
+      _bcRoot.render(React.createElement(window.BubbleChartApp, { rows: bcBuildDataset() }));
+      _bubbleHideOverlay();
+    })
+    .catch(err=>{
+      console.error('bc: load failed', err);
+      _bubbleShowOverlay('Chart failed to load: '+(err && err.message ? err.message : err));
+      _bcMounting = false;
+    });
+}
+function bcUpdate(){
+  if (!_bcRoot) { bcMount(); return; }
+  _bcRoot.render(React.createElement(window.BubbleChartApp, { rows: bcBuildDataset() }));
   _bubbleHideOverlay();
 }
+// ==== /Bubble Chart v2 helpers ====
+
 // -- Bubble chart custom tooltip --
 const _bubbleTipEl=(()=>{const d=document.createElement('div');d.className='bubble-tip';document.body.appendChild(d);return d;})();
 let _bubbleTipTicker='';
@@ -7190,6 +8288,28 @@ function showBubbleTip(d, evt){
       <span style="font-size:10px;color:${chgColor};white-space:nowrap">${chgLabel}</span>
     </div>`;
   }).join(''):'';
+  // Build per-insider rows from INSIDERS (group by insider, sum value, take latest date)
+  const iRowsRaw=(INSIDERS||[]).filter(r=>r&&r.ticker===d._t);
+  const insMap=new Map();
+  iRowsRaw.forEach(r=>{
+    const name=String(r.insider||'').trim()||'(unknown)';
+    const v=Number(r.total_value)||0;
+    const dt=r.trans_date||r.filing_date||'';
+    const cur=insMap.get(name)||{name,total:0,latest:'',trades:0};
+    cur.total+=v; cur.trades+=1;
+    if(dt>cur.latest) cur.latest=dt;
+    insMap.set(name,cur);
+  });
+  const insRowsHtml=insMap.size?[...insMap.values()].sort((a,b)=>b.total-a.total).map(it=>{
+    const fmtV=it.total>0?(typeof fmt_money_js==='function'?fmt_money_js(it.total):('$'+Math.round(it.total).toLocaleString())):'—';
+    const dateShort=it.latest?String(it.latest).slice(0,10):'';
+    const tradeBadge=it.trades>1?` <span style="opacity:.6">×${it.trades}</span>`:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-top:1px solid rgba(255,255,255,.05)">
+      <span style="font-size:10px;color:#cbd5e1;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(it.name)}">${escHtml(it.name)}${tradeBadge}</span>
+      <span style="font-size:10px;color:#fbbf24;margin:0 8px;white-space:nowrap">${fmtV}</span>
+      <span style="font-size:10px;color:#94a3b8;white-space:nowrap">${dateShort}</span>
+    </div>`;
+  }).join(''):'';
   _bubbleTipEl.innerHTML=`
     <div class="bubble-tip-tv"><tv-mini-chart symbol="${getFinalSymbol(d._t,'')}" time-frame="3M" line-chart-type="Baseline" theme="dark" style="width:100%;height:208px;display:block;margin-top:-2px"></tv-mini-chart></div>
     <div class="bubble-tip-body">
@@ -7205,8 +8325,8 @@ function showBubbleTip(d, evt){
         <span class="bubble-tip-lbl">Total Held Value</span>
         <span class="bubble-tip-val" style="color:#4ade80">${d._v||'—'}</span>
       </div>
-      ${d._ib>0?`<div class="bubble-tip-row"><span class="bubble-tip-lbl">Insider Buys</span><span class="bubble-tip-val" style="color:#fbbf24">${d._ib} distinct</span></div>`:''}
       ${mgrRowsHtml?`<div style="margin-top:6px;padding-top:2px;border-top:1px solid rgba(255,255,255,.08)"><div style="font-size:9px;color:#4a5568;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Managers (${hRows.length})</div>${mgrRowsHtml}</div>`:''}
+      ${insRowsHtml?`<div style="margin-top:6px;padding-top:2px;border-top:1px solid rgba(255,255,255,.08)"><div style="font-size:9px;color:#4a5568;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Insider Buys (${insMap.size} distinct · ${iRowsRaw.length} trades)</div>${insRowsHtml}</div>`:''}
       <div class="bubble-tip-click">CLICK TO OPEN CHART →</div>
     </div>`;
   _bubbleTipEl.classList.add('show');
@@ -7260,10 +8380,16 @@ document.getElementById('bubbleChart')?.addEventListener('click',evt=>{
 
 // -- TAB 3: BUY LEVELS --
 let blChart=null,giHistChart=null,_crosshairRatio=null,_crosshairXVal=null,_crosshairY=null,_crosshairSource='';
+let _blMeasureMode=false,_blMeasureStart=null,_blMeasureCurrent=null,_blMeasurePhase=0;
+// _blMeasurePhase: 0=idle, 1=anchored+free-drag, 2=locked
 var _blPeriod=365,_blChartType='hollow',_blShowGI=true,_blGIPos='lower',
     _blShowEarnings=true,_blShowReversals=true,_blShowInsiders=true;
+var _blLogScale=false;
 var _blShowVwap=false,_blShowValueChart=false,_blShowMA50=false,_blShowMA200=false,
     _blShowProfile=true,_blShowVSA=true,_blShowDataTooltip=false,_blShowCrosshair=true;
+var _blShowTrendlines=false,_blShowBrokenTrendlines=true,_blTrendPivotK=5,_blTrendWeightByScore=false,_blTrendWeightScale=70;
+var _blTrendDownColor='#ef4444',_blTrendUpColor='#22c55e',_blTrendBrokenColor='#666666';
+var _blShowSRLines=false,_blSRSensitivity=14,_blSRColor='#888888',_blSRWeightByTouches=false,_blSRWeightScale=70;
 var _blShowTargetLines=true,_blShowStopLine=true,_blShowLookbackBar=true;
 let _blProjLookback=0;  // 0 = current bar; N = use close price N bars ago as entry anchor
 function _syncLookbackBarPos(chart){
@@ -7323,7 +8449,7 @@ function blHexToRgba(hex,alpha){
 }
 var _blChartColorMode='neutral';
 let _blOhlcv=[];
-let _blVsaCache=null, _blIndCache=null;
+let _blVsaCache=null, _blIndCache=null, _blTrendlineCache=null, _blSRLevelsCache=null;
 let _blBuys=[];
 let _blBuysIdxReady=false; // true only after _blBuys._idx values have been mapped
 let _blRenderedTicker='';
@@ -7448,10 +8574,18 @@ function syncGIToBuyRange(){
       hiP+=flatPad;
     }
     const span=Math.max(0.01,hiP-loP);
-    const padTop=Math.max(0.01,span*(_blMarginTopPct/100));
-    // Preserve extra lower room for the overlaid volume panel.
-    const padBottom=Math.max(0.01,span*(_blMarginBotPct/100));
-    const yMin=Math.max(0,loP-padBottom),yMax=hiP+padTop;
+    let yMin,yMax;
+    if(_blLogScale){
+      const ll=Math.log(Math.max(0.001,loP)),lh=Math.log(Math.max(0.001,hiP));
+      const ls=Math.max(0.001,lh-ll);
+      yMin=Math.max(0.001,Math.exp(ll-ls*(_blMarginBotPct/100)));
+      yMax=Math.exp(lh+ls*(_blMarginTopPct/100));
+    }else{
+      const padTop=Math.max(0.01,span*(_blMarginTopPct/100));
+      // Preserve extra lower room for the overlaid volume panel.
+      const padBottom=Math.max(0.01,span*(_blMarginBotPct/100));
+      yMin=Math.max(0,loP-padBottom); yMax=hiP+padTop;
+    }
     if(blChart.options&&blChart.options.scales&&blChart.options.scales.y){
       buyChanged=setRangeIfChanged(blChart.options.scales.y,yMin,yMax);
     }
@@ -7554,9 +8688,22 @@ function blCloseChartTypeMenu(){
   if(menu) menu.style.display='none';
   if(btn) btn.classList.remove('open');
 }
+function blCloseIndicatorsMenu(){
+  const menu=document.getElementById('blIndicatorsMenu');
+  const btn=document.getElementById('blBtnIndicators');
+  if(menu) menu.style.display='none';
+  if(btn) btn.classList.remove('open');
+}
+function blCloseChartDisplayMenu(){
+  const menu=document.getElementById('blChartDisplayMenu');
+  const btn=document.getElementById('blBtnChartDisplay');
+  if(menu) menu.style.display='none';
+  if(btn) btn.classList.remove('open');
+}
 function blToggleIndicatorsMenu(evt){
   evt?.stopPropagation?.();
   blCloseChartTypeMenu();
+  blCloseChartDisplayMenu();
   const menu=document.getElementById('blIndicatorsMenu');
   const btn=document.getElementById('blBtnIndicators');
   const isOpen=menu&&(menu.style.display!=='none'&&menu.style.display!=='');
@@ -7565,12 +8712,20 @@ function blToggleIndicatorsMenu(evt){
 }
 function blToggleChartTypeMenu(evt){
   evt?.stopPropagation?.();
-  const indMenu=document.getElementById('blIndicatorsMenu');
-  const indBtn=document.getElementById('blBtnIndicators');
-  if(indMenu) indMenu.style.display='none';
-  if(indBtn) indBtn.classList.remove('open');
+  blCloseIndicatorsMenu();
+  blCloseChartDisplayMenu();
   const menu=document.getElementById('blChartTypeMenu');
   const btn=document.getElementById('blBtnChartType');
+  const isOpen=menu&&(menu.style.display!=='none'&&menu.style.display!=='');
+  if(menu) menu.style.display=isOpen?'none':'block';
+  if(btn) btn.classList.toggle('open',!isOpen);
+}
+function blToggleChartDisplayMenu(evt){
+  evt?.stopPropagation?.();
+  blCloseChartTypeMenu();
+  blCloseIndicatorsMenu();
+  const menu=document.getElementById('blChartDisplayMenu');
+  const btn=document.getElementById('blBtnChartDisplay');
   const isOpen=menu&&(menu.style.display!=='none'&&menu.style.display!=='');
   if(menu) menu.style.display=isOpen?'none':'block';
   if(btn) btn.classList.toggle('open',!isOpen);
@@ -7586,6 +8741,7 @@ document.addEventListener('click', evt=>{
   };
   closeMenu('blIndicatorsMenu','blBtnIndicators');
   closeMenu('blChartTypeMenu','blBtnChartType');
+  closeMenu('blChartDisplayMenu','blBtnChartDisplay');
 });
 function blChartTypeLabel(mode){
   return BL_CHART_TYPE_LABELS[String(mode||'').toLowerCase()] || BL_CHART_TYPE_LABELS.hollow;
@@ -7623,6 +8779,13 @@ function blSyncChartTypeUI(){
   const _vwaps=document.getElementById('blVwapSwatch'); if(_vwaps) _vwaps.style.background=_blVwapColor;
   const _ma50s=document.getElementById('blMA50Swatch'); if(_ma50s) _ma50s.style.background=_blMA50Color;
   const _ma200s=document.getElementById('blMA200Swatch'); if(_ma200s) _ma200s.style.background=_blMA200Color;
+  set('blLogScaleChk', _blLogScale);
+}
+function blToggleLogScale(){
+  _blLogScale=!_blLogScale;
+  blSyncChartTypeUI();
+  saveBuyLevelsPrefs();
+  renderBuyLevels();
 }
 function blSetChartType(mode){
   const next=String(mode||'').toLowerCase();
@@ -7687,7 +8850,7 @@ function blToggleInsiderColorPicker(evt){
   const ci=document.getElementById('blInsiderDotColorCustom'); if(ci) ci.value=_blInsiderDotColor;
 }
 function blToggleIndColorPicker(panelId, inputId, currentColor){
-  const allPanels=['blUpColorPanel','blDownColorPanel','blVCColorPanel','blVwapColorPanel','blMA50ColorPanel','blMA200ColorPanel'];
+  const allPanels=['blUpColorPanel','blDownColorPanel','blVCColorPanel','blVwapColorPanel','blMA50ColorPanel','blMA200ColorPanel','blTrendDownColorPanel','blTrendUpColorPanel','blTrendBrokenColorPanel','blSRColorPanel'];
   allPanels.forEach(id=>{
     if(id!==panelId){const p=document.getElementById(id);if(p)p.style.display='none';}
   });
@@ -7824,6 +8987,19 @@ function blSyncIndicatorChecks(){
   set('blIndVwapChk',_blShowVwap);
   set('blIndMA50Chk',_blShowMA50);
   set('blIndMA200Chk',_blShowMA200);
+  set('blIndTrendlinesChk',_blShowTrendlines);
+  set('blIndBrokenTrendlinesChk',_blShowBrokenTrendlines);
+  set('blIndTrendWeightChk',_blTrendWeightByScore);
+  blSyncTrendWeightScaleUI();
+  blSyncTrendPivotKUI();
+  const _tdsw=document.getElementById('blTrendDownSwatch'); if(_tdsw) _tdsw.style.background=_blTrendDownColor;
+  const _tusw=document.getElementById('blTrendUpSwatch'); if(_tusw) _tusw.style.background=_blTrendUpColor;
+  const _tbsw=document.getElementById('blTrendBrokenSwatch'); if(_tbsw) _tbsw.style.background=_blTrendBrokenColor;
+  set('blIndSRLinesChk',_blShowSRLines);
+  set('blIndSRWeightChk',_blSRWeightByTouches);
+  blSyncSRWeightScaleUI();
+  blSyncSRSensitivityUI();
+  const _srsw=document.getElementById('blSRSwatch'); if(_srsw) _srsw.style.background=_blSRColor;
   set('blIndVSAChk',_blShowVSA);
   set('blIndTargetLinesChk',_blShowTargetLines);
   set('blIndStopLineChk',_blShowStopLine);
@@ -7852,6 +9028,85 @@ function blToggleValueChart(){ _blShowValueChart=!_blShowValueChart; if(blChart)
 function blToggleVwap(){ _blShowVwap=!_blShowVwap; if(blChart) blChart.update(); blSyncIndicatorChecks(); saveBuyLevelsPrefs(); }
 function blToggleMA50(){ _blShowMA50=!_blShowMA50; if(blChart) blChart.update(); blSyncIndicatorChecks(); saveBuyLevelsPrefs(); }
 function blToggleMA200(){ _blShowMA200=!_blShowMA200; if(blChart) blChart.update(); blSyncIndicatorChecks(); saveBuyLevelsPrefs(); }
+function blToggleTrendlines(){ _blShowTrendlines=!_blShowTrendlines; if(blChart) blChart.update('none'); blSyncIndicatorChecks(); saveBuyLevelsPrefs(); }
+function blToggleBrokenTrendlines(){ _blShowBrokenTrendlines=!_blShowBrokenTrendlines; if(blChart) blChart.update('none'); blSyncIndicatorChecks(); saveBuyLevelsPrefs(); }
+function blSyncTrendWeightScaleUI(){
+  const row=document.getElementById('blTrendWeightScaleRow');
+  if(row) row.style.display=_blTrendWeightByScore?'flex':'none';
+  const inp=document.getElementById('blTrendWeightScaleInput'); if(inp) inp.value=String(_blTrendWeightScale);
+  const lbl=document.getElementById('blTrendWeightScaleValue'); if(lbl) lbl.textContent=_blTrendWeightScale+'%';
+}
+function blSetTrendWeightScale(val){
+  const v=clampNum(Math.round(Number(val)),10,100);
+  _blTrendWeightScale=v;
+  const lbl=document.getElementById('blTrendWeightScaleValue'); if(lbl) lbl.textContent=v+'%';
+  if(blChart) blChart.update('none');
+  saveBuyLevelsPrefs();
+}
+function blSyncSRWeightScaleUI(){
+  const row=document.getElementById('blSRWeightScaleRow');
+  if(row) row.style.display=_blSRWeightByTouches?'flex':'none';
+  const inp=document.getElementById('blSRWeightScaleInput'); if(inp) inp.value=String(_blSRWeightScale);
+  const lbl=document.getElementById('blSRWeightScaleValue'); if(lbl) lbl.textContent=_blSRWeightScale+'%';
+}
+function blSetSRWeightScale(val){
+  const v=clampNum(Math.round(Number(val)),10,100);
+  _blSRWeightScale=v;
+  const lbl=document.getElementById('blSRWeightScaleValue'); if(lbl) lbl.textContent=v+'%';
+  if(blChart) blChart.update('none');
+  saveBuyLevelsPrefs();
+}
+function blToggleTrendWeight(){
+  _blTrendWeightByScore=!_blTrendWeightByScore;
+  blSyncTrendWeightScaleUI();
+  if(blChart) blChart.update('none'); blSyncIndicatorChecks(); saveBuyLevelsPrefs();
+}
+function blToggleSRWeight(){
+  _blSRWeightByTouches=!_blSRWeightByTouches;
+  blSyncSRWeightScaleUI();
+  if(blChart) blChart.update('none'); blSyncIndicatorChecks(); saveBuyLevelsPrefs();
+}
+function blSyncTrendPivotKUI(){
+  const k=clampNum(Math.round(Number(_blTrendPivotK)||5), 2, 20);
+  _blTrendPivotK=k;
+  const sensitivity = 21 - k; // higher slider value = more sensitive = more lines
+  const inp=document.getElementById('blTrendPivotKInput'); if(inp) inp.value=String(sensitivity);
+  const lbl=document.getElementById('blTrendPivotKValue'); if(lbl) lbl.textContent=String(sensitivity);
+}
+function blSetTrendSensitivity(val){
+  const v=parseInt(val,10);
+  if(!Number.isFinite(v)) return;
+  const sensitivity=clampNum(v,1,19);
+  const nextK=21-sensitivity;
+  const changed=nextK!==_blTrendPivotK;
+  _blTrendPivotK=nextK;
+  blSyncTrendPivotKUI();
+  if(changed) _blTrendlineCache=null;
+  saveBuyLevelsPrefs();
+  if(changed && blChart) blChart.update('none');
+}
+function blSetTrendDownColor(hex){ if(!hex)return; _blTrendDownColor=hex; const sw=document.getElementById('blTrendDownSwatch'); if(sw)sw.style.background=hex; const ci=document.getElementById('blTrendDownColorCustom'); if(ci)ci.value=hex; saveBuyLevelsPrefs(); if(blChart)blChart.update('none'); }
+function blSetTrendUpColor(hex){ if(!hex)return; _blTrendUpColor=hex; const sw=document.getElementById('blTrendUpSwatch'); if(sw)sw.style.background=hex; const ci=document.getElementById('blTrendUpColorCustom'); if(ci)ci.value=hex; saveBuyLevelsPrefs(); if(blChart)blChart.update('none'); }
+function blSetTrendBrokenColor(hex){ if(!hex)return; _blTrendBrokenColor=hex; const sw=document.getElementById('blTrendBrokenSwatch'); if(sw)sw.style.background=hex; const ci=document.getElementById('blTrendBrokenColorCustom'); if(ci)ci.value=hex; saveBuyLevelsPrefs(); if(blChart)blChart.update('none'); }
+function blToggleSRLines(){ _blShowSRLines=!_blShowSRLines; if(blChart) blChart.update('none'); blSyncIndicatorChecks(); saveBuyLevelsPrefs(); }
+function blSyncSRSensitivityUI(){
+  const s=clampNum(Math.round(Number(_blSRSensitivity)||10), 1, 19);
+  _blSRSensitivity=s;
+  const inp=document.getElementById('blSRSensitivityInput'); if(inp) inp.value=String(s);
+  const lbl=document.getElementById('blSRSensitivityValue'); if(lbl) lbl.textContent=String(s);
+}
+function blSetSRSensitivity(val){
+  const v=parseInt(val,10);
+  if(!Number.isFinite(v)) return;
+  const next=clampNum(v,1,19);
+  const changed=next!==_blSRSensitivity;
+  _blSRSensitivity=next;
+  blSyncSRSensitivityUI();
+  if(changed) _blSRLevelsCache=null;
+  saveBuyLevelsPrefs();
+  if(changed && blChart) blChart.update('none');
+}
+function blSetSRColor(hex){ if(!hex)return; _blSRColor=hex; const sw=document.getElementById('blSRSwatch'); if(sw)sw.style.background=hex; const ci=document.getElementById('blSRColorCustom'); if(ci)ci.value=hex; saveBuyLevelsPrefs(); if(blChart)blChart.update('none'); }
 function blToggleDataTooltip(){
   _blShowDataTooltip=!_blShowDataTooltip;
   if(!_blShowDataTooltip){
@@ -7873,6 +9128,28 @@ function blToggleCrosshair(){
   saveBuyLevelsPrefs();
   if(blChart) blChart.draw();
   if(giHistChart) giHistChart.draw();
+}
+function blToggleMeasure(){
+  _blMeasureMode=!_blMeasureMode;
+  // Always clear old measurement when toggling so the button acts as a clean reset
+  _blMeasureStart=null;_blMeasureCurrent=null;_blMeasurePhase=0;
+  const btn=document.getElementById('blBtnMeasure');
+  if(btn) btn.classList.toggle('active',_blMeasureMode);
+  const canvas=document.getElementById('buyLevelChart');
+  if(canvas) canvas.style.cursor=_blMeasureMode?'crosshair':'';
+  if(blChart&&blChart.options?.plugins?.zoom?.pan)
+    blChart.options.plugins.zoom.pan.enabled=!_blMeasureMode;
+  if(blChart) blChart.update('none');
+}
+function _blMeasureDeactivate(){
+  _blMeasureMode=false;_blMeasurePhase=0;
+  const btn=document.getElementById('blBtnMeasure');
+  if(btn) btn.classList.remove('active');
+  const canvas=document.getElementById('buyLevelChart');
+  if(canvas) canvas.style.cursor='';
+  if(blChart&&blChart.options?.plugins?.zoom?.pan)
+    blChart.options.plugins.zoom.pan.enabled=true;
+  if(blChart) blChart.update('none');
 }
 function blToggleGIPos(){ blCycleGIPos(); }
 function blCycleGIPos(){
@@ -8003,6 +9280,247 @@ function blIndicatorSeries(){
     vol20: blVolumeMA(20),
   };
   return _blIndCache;
+}
+function blFindPivots(ohlcv, k){
+  const highs=[], lows=[];
+  if(!Array.isArray(ohlcv) || ohlcv.length < (2*k+1)) return {highs, lows};
+  for(let i=k; i<ohlcv.length-k; i++){
+    const h=Number(ohlcv[i].h), l=Number(ohlcv[i].l);
+    if(!Number.isFinite(h)||!Number.isFinite(l)) continue;
+    let isHigh=true, isLow=true;
+    for(let j=1; j<=k; j++){
+      const lh=Number(ohlcv[i-j].h), rh=Number(ohlcv[i+j].h);
+      const ll=Number(ohlcv[i-j].l), rl=Number(ohlcv[i+j].l);
+      if(lh>=h || rh>h) isHigh=false;
+      if(ll<=l || rl<l) isLow=false;
+      if(!isHigh && !isLow) break;
+    }
+    if(isHigh) highs.push({i, price:h});
+    if(isLow) lows.push({i, price:l});
+  }
+  return {highs, lows};
+}
+function blDetectTrendlines(ohlcv, k){
+  const empty={descending:[], ascending:[], breakTol:0};
+  if(!Array.isArray(ohlcv)||!ohlcv.length) return empty;
+  const n=ohlcv.length;
+  const lastIdx=n-1;
+
+  // Average true range over last 100 bars — computed once, shared across all k levels.
+  let avgRange=0, cnt=0;
+  for(let i=Math.max(0,n-100); i<n; i++){
+    const r=Number(ohlcv[i].h)-Number(ohlcv[i].l);
+    if(Number.isFinite(r) && r>0){ avgRange+=r; cnt++; }
+  }
+  avgRange = cnt>0 ? avgRange/cnt : 0;
+  // Slightly relaxed breakTol (0.25 vs old 0.18) so valid lines in volatile
+  // downtrends aren't rejected because one candle briefly pokes through.
+  const breakTol = avgRange * 0.25;
+  const touchTol = avgRange * 0.35;
+
+  // MONOTONICITY DESIGN:
+  // We ALWAYS detect lines from the same fixed k-levels: [2, 3, 7].
+  // The user's k (from the sensitivity slider) is NO LONGER used to select
+  // which k-levels to scan — it only controls topN (how many lines to display).
+  //
+  // Why this guarantees monotonicity:
+  //   • The full candidate pool is identical at every sensitivity setting
+  //     (same kLevels=[2,3,7] → same unique (p1,p2) pairs → same scores).
+  //   • Sensitivity only changes topN: higher sensitivity → larger topN → prefix
+  //     of sorted-by-score list is a SUPERSET of the lower-sensitivity prefix.
+  //   • So lines at sensitivity S are always a subset of lines at sensitivity S+1.
+  //     No line can ever disappear when the slider moves right.
+  //
+  // Previous design ([3,7,k] with global cap-60) failed because:
+  //   at s=19 (k=2), the k=2 run generated more fine-grained candidates whose
+  //   scores outranked some k=3 lines, pushing them past position 60 in the cap.
+  const kLevels = [2, 3, 7];
+
+  // topN: how many lines to display. Scales with sensitivity (k = 21 - sensitivity).
+  // k=2 (s=19) → topN=80 (show up to 80 lines)
+  // k=20 (s=1) → topN=8  (show only 8 most significant lines)
+  // Monotonic: topN(k) > topN(k+1), so higher sensitivity always shows ≥ lines.
+  const topN = Math.round(8 + (20 - k) / 18 * 72);
+
+  // minSpan: small fixed floor so short-term lines are not silently rejected.
+  const minSpanFor = kv => Math.max(5, Math.round(kv * 1.3));
+
+  const buildLines = (pivots, type, kv) => {
+    const lines=[];
+    const minSpan=minSpanFor(kv);
+    if(pivots.length<2) return lines;
+    for(let a=0; a<pivots.length-1; a++){
+      for(let b=a+1; b<pivots.length; b++){
+        const p1=pivots[a], p2=pivots[b];
+        const dx=p2.i-p1.i;
+        if(dx<minSpan) continue;
+        const slope=(p2.price-p1.price)/dx;
+        if(type==='down' && slope>=0) continue;
+        if(type==='up' && slope<=0) continue;
+        // Validate: no candle between p1 and p2 pierces the line beyond breakTol
+        let valid=true, touches=2;
+        for(let i=p1.i+1; i<p2.i; i++){
+          const lineY=p1.price + slope*(i-p1.i);
+          const c=ohlcv[i];
+          if(type==='down'){
+            if(Number(c.h) > lineY+breakTol){ valid=false; break; }
+            if(Number(c.h) >= lineY-touchTol) touches++;
+          } else {
+            if(Number(c.l) < lineY-breakTol){ valid=false; break; }
+            if(Number(c.l) <= lineY+touchTol) touches++;
+          }
+        }
+        if(!valid) continue;
+        // Detect break after p2 (close-based)
+        let broken=false, brokenAt=-1;
+        for(let i=p2.i+1; i<=lastIdx; i++){
+          const lineY=p1.price + slope*(i-p1.i);
+          const c=Number(ohlcv[i].c);
+          if(type==='down' && c > lineY+breakTol){ broken=true; brokenAt=i; break; }
+          if(type==='up'   && c < lineY-breakTol){ broken=true; brokenAt=i; break; }
+        }
+        const length=(broken ? brokenAt : lastIdx) - p1.i;
+        const score=length * (touches*touches);
+        lines.push({type, p1, p2, slope, intercept:p1.price - slope*p1.i,
+                    touches, broken, brokenAt, score, length, kv});
+      }
+    }
+    return lines;
+  };
+
+  // Merge lines from all k-levels, dedup by EXACT pivot pair, then slice to topN.
+  //
+  // Exact-pair dedup: since kLevels=[2,3,7] and k=2 pivots ⊃ k=3 pivots ⊃ k=7 pivots,
+  // the same (p1.i, p2.i) pair can be generated by multiple levels. We keep the first
+  // occurrence (highest score after sorting), which is the same score for any level.
+  //
+  // Stable secondary sort (p1.i, then p2.i) ensures a tie in score always resolves the
+  // same way regardless of how many lines were generated — no sort-instability flips.
+  //
+  // Slice to topN guarantees monotonicity: topN at sensitivity S is always ≤ topN at
+  // sensitivity S+1, and allDeduped is identical at every sensitivity, so the slice at
+  // S is a strict prefix of the slice at S+1.
+  const mergeAndDedup = (allLines) => {
+    allLines.sort((a,b) => b.score-a.score || a.p1.i-b.p1.i || a.p2.i-b.p2.i);
+    const seen = new Set();
+    const kept=[];
+    for(const ln of allLines){
+      const key = `${ln.p1.i},${ln.p2.i}`;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      kept.push(ln);
+    }
+    return kept.slice(0, topN);
+  };
+
+  const descLines=[], ascLines=[];
+  for(const kv of kLevels){
+    const {highs, lows}=blFindPivots(ohlcv, kv);
+    descLines.push(...buildLines(highs, 'down', kv));
+    ascLines.push(...buildLines(lows,  'up',   kv));
+  }
+
+  return {
+    descending: mergeAndDedup(descLines),
+    ascending:  mergeAndDedup(ascLines),
+    breakTol
+  };
+}
+function blTrendlineSeries(){
+  if(_blTrendlineCache) return _blTrendlineCache;
+  const k=clampNum(Math.round(Number(_blTrendPivotK)||5), 2, 30);
+  _blTrendlineCache=blDetectTrendlines(_blOhlcv||[], k);
+  return _blTrendlineCache;
+}
+function blDetectSRLevels(ohlcv, sensitivity){
+  const empty={levels:[]};
+  if(!Array.isArray(ohlcv) || ohlcv.length<10) return empty;
+  const s=clampNum(Math.round(Number(sensitivity)||10), 1, 19);
+  const n=ohlcv.length;
+
+  // Average daily range over recent bars — used for all tolerance scaling.
+  let avgRange=0, cnt=0;
+  for(let i=Math.max(0,n-100); i<n; i++){
+    const r=Number(ohlcv[i].h)-Number(ohlcv[i].l);
+    if(Number.isFinite(r) && r>0){ avgRange+=r; cnt++; }
+  }
+  avgRange = cnt>0 ? avgRange/cnt : 0;
+  if(avgRange===0) return empty;
+
+  // Pivot window k scales with sensitivity: s=1 → k=4 (only major reversals),
+  // s=19 → k=1 (catch even small turns).
+  const k = Math.max(1, Math.round(4 - (s-1)*3/18));
+
+  // NON-STRICT local extremes: a bar is a pivot high if NO neighbour within ±k
+  // has a STRICTLY higher high (equal neighbours are allowed).
+  // WHY non-strict instead of blFindPivots:
+  //   blFindPivots uses strict-left (h[i-j] >= h[i] → fail), so at a flat S/R
+  //   zone where 3-5 bars all share the same high, NONE of them beats its left
+  //   neighbour → zero pivots found even though the zone is obvious support/
+  //   resistance.  Non-strict means all bars of a flat top qualify, giving the
+  //   cluster the touch count it deserves while still ignoring trending bars
+  //   (a bar in a downtrend always has a left neighbour that IS strictly higher).
+  const srHighs = new Map(); // barIdx → price
+  const srLows  = new Map();
+  for(let i=k; i<n-k; i++){
+    const h=Number(ohlcv[i].h), l=Number(ohlcv[i].l);
+    if(!Number.isFinite(h)||!Number.isFinite(l)) continue;
+    let isHigh=true, isLow=true;
+    for(let j=1; j<=k; j++){
+      if(Number(ohlcv[i-j].h) > h || Number(ohlcv[i+j].h) > h) isHigh=false;
+      if(Number(ohlcv[i-j].l) < l || Number(ohlcv[i+j].l) < l) isLow=false;
+      if(!isHigh && !isLow) break;
+    }
+    if(isHigh) srHighs.set(i, h);
+    if(isLow)  srLows.set(i, l);
+  }
+
+  const touches = [];
+  srHighs.forEach((price,i) => touches.push({i, price}));
+  srLows.forEach( (price,i) => touches.push({i, price}));
+  if(touches.length < 4) return empty;
+
+  // Cluster half-width: s=1 → 18% avgRange (tight), s=19 → 52% avgRange (wide).
+  // Full cluster window = 2*tol; minPrice-anchored so the window never drifts.
+  const tol = avgRange * (0.18 + (s-1)*0.34/18);
+
+  // minTouches (unique bar indices in cluster): s=1→5, s=19→2.
+  const minTouches = Math.max(2, Math.round(5 - (s-1)*3/18));
+
+  // minSpan: first-to-last touch must be at least this many bars apart, so we
+  // require a PERSISTENT level — not just one momentary consolidation episode.
+  const minSpan = Math.max(8, Math.floor(n * 0.025));
+
+  touches.sort((a,b) => a.price-b.price);
+  const clusters=[];
+  let cur=null;
+  for(const t of touches){
+    if(cur && (t.price - cur.minP) <= 2*tol){
+      cur.touches.push(t);
+      if(t.price > cur.maxP) cur.maxP=t.price;
+    } else {
+      cur={minP:t.price, maxP:t.price, touches:[t]};
+      clusters.push(cur);
+    }
+  }
+
+  const levels = clusters.map(c=>{
+    const barSet = new Set(c.touches.map(t=>t.i));
+    const indices = Array.from(barSet).sort((a,b)=>a-b);
+    const price = c.touches.reduce((s,t)=>s+t.price,0) / c.touches.length;
+    const span = indices.length>1 ? indices[indices.length-1]-indices[0] : 0;
+    return { price, touches:barSet.size, firstIdx:indices[0], lastIdx:indices[indices.length-1], span };
+  })
+  .filter(lv => lv.touches >= minTouches && lv.span >= minSpan)
+  .sort((a,b) => b.touches-a.touches)
+  .slice(0, 40);
+
+  return {levels, tol, minTouches};
+}
+function blSRLevels(){
+  if(_blSRLevelsCache) return _blSRLevelsCache;
+  _blSRLevelsCache=blDetectSRLevels(_blOhlcv||[], _blSRSensitivity);
+  return _blSRLevelsCache;
 }
 function blVolumeStats(){
   if(_blVsaCache) return _blVsaCache;
@@ -8159,13 +9677,22 @@ function blCrosshairXValue(){
 }
 function blCrosshairXPixel(chart){
   if(!chart||_crosshairRatio===null) return null;
-  const area=chart.chartArea;
-  if(!area) return null;
-  // Use ratio (fractional position within the plot area) rather than a
-  // per-chart getPixelForValue() call.  Both charts share the same ratio
-  // so the line always lands at the same proportional position regardless
-  // of differing chartArea.left values caused by y-axis label width differences.
-  const px=area.left + clampNum(_crosshairRatio,0,1)*(area.right-area.left);
+  // _crosshairRatio is always normalised to blChart's chartArea (see mouse handler).
+  // Compute pixel using blChart's coordinate system, then translate to the target
+  // chart's canvas — identical strategy to giLowerVcPlugin — so both panels always
+  // show the vertical line at exactly the same screen X.
+  const blArea=blChart?.chartArea;
+  const refArea=blArea||chart.chartArea;
+  if(!refArea) return null;
+  const refPx=refArea.left + clampNum(_crosshairRatio,0,1)*(refArea.right-refArea.left);
+  if(!blArea||chart===blChart||!blChart.canvas||!chart.canvas){
+    return Number.isFinite(refPx)?blAlignCanvasPx(refPx, chart, 1):null;
+  }
+  // Translate blChart canvas X → target chart canvas X using the same rect-offset
+  // correction that giLowerVcPlugin uses for the GI line vertices.
+  const blRect=blChart.canvas.getBoundingClientRect();
+  const tgtRect=chart.canvas.getBoundingClientRect();
+  const px=refPx-(tgtRect.left-blRect.left);
   return Number.isFinite(px)?blAlignCanvasPx(px, chart, 1):null;
 }
 function blCrosshairDateIdx(){
@@ -8606,9 +10133,14 @@ const wickPlugin={
         const bodyLeft=blAlignCanvasPx(px-cw/2, chart, alignW1);
         const bodyW=Math.max(1, Math.round(cw));
         // Per-bar: detect whether this individual bar is solid-filled or hollow.
-        // In hollow mode: down vs prev close = solid fill; up vs prev close = hollow outline.
+        // hollow mode:  down vs prev close = solid; up vs prev close = hollow.
+        // volcndle mode: down vs own open  = solid; up vs own open   = hollow.
+        //   (_blVcFilled overrides to always-solid for volcndle)
         const prevClose=i>0?Number(_blOhlcv[i-1]?.c):NaN;
-        const isBarSolid=(chartType==='candle')||(chartType==='volcndle'&&_blVcFilled)||((chartType==='hollow'||(chartType==='volcndle'&&!_blVcFilled))&&Number.isFinite(prevClose)&&Number(d.c)<prevClose);
+        const isBarSolid=(chartType==='candle')
+          ||(chartType==='volcndle'&&_blVcFilled)
+          ||(chartType==='volcndle'&&!_blVcFilled&&Number(d.c)<Number(d.o))
+          ||(chartType==='hollow'&&Number.isFinite(prevClose)&&Number(d.c)<prevClose);
         // Body overlap rendering:
         //   solid bar  ? fill overlap region + horizontal cross at band boundary (clearly visible)
         //   hollow bar ? vertical sides only; NO fill, NO horizontal inside the hollow area
@@ -8807,8 +10339,14 @@ const crosshairPlugin={
     const yPx=_crosshairY===null?null:blAlignCanvasPx(_crosshairY, chart, 1);
     ctx.save();
     ctx.strokeStyle='rgba(156,176,196,0.5)';ctx.lineWidth=1;
+    // Extend the vertical line to the canvas edge on the side that faces the
+    // adjacent panel so the two segments form one solid line with no gap.
+    // blChart is above giHistChart, so extend DOWN to canvas bottom.
+    // giHistChart is below blChart, so extend UP to canvas top (y=0).
+    const lineTop    = (chart===giHistChart) ? 0      : top;
+    const lineBottom = (chart===blChart)     ? chart.height : bottom;
     ctx.beginPath();
-    ctx.moveTo(px,top);ctx.lineTo(px,bottom);ctx.stroke();
+    ctx.moveTo(px,lineTop);ctx.lineTo(px,lineBottom);ctx.stroke();
     const showHorizontal=yPx!==null&&chart===blCrosshairSourceChart();
     if(showHorizontal){
       ctx.beginPath();
@@ -8826,6 +10364,75 @@ const crosshairPlugin={
   }
 };
 
+const measurePlugin={
+  id:'measurePlugin',
+  afterDraw(chart){
+    if(chart!==blChart)return;
+    if(!_blMeasureStart||!_blMeasureCurrent)return;
+    const {ctx,chartArea:{top,bottom,left,right},scales}=chart;
+    if(!scales?.x||!scales?.y)return;
+    const sIdx=_blMeasureStart.idx,eIdx=_blMeasureCurrent.idx;
+    const sPrice=_blMeasureStart.price,ePrice=_blMeasureCurrent.price;
+    const loPrice=Math.min(sPrice,ePrice),hiPrice=Math.max(sPrice,ePrice);
+    const loIdx=Math.min(sIdx,eIdx),hiIdx=Math.max(sIdx,eIdx);
+    const x1=Math.max(left,scales.x.getPixelForValue(loIdx));
+    const x2=Math.min(right,scales.x.getPixelForValue(hiIdx));
+    const yHi=scales.y.getPixelForValue(hiPrice);
+    const yLo=scales.y.getPixelForValue(loPrice);
+    const isUp=ePrice>=sPrice;
+    const fgColor=isUp?'rgba(33,150,243,0.65)':'rgba(255,82,82,0.65)';
+    const fillColor=isUp?'rgba(33,150,243,0.07)':'rgba(255,82,82,0.07)';
+    ctx.save();
+    ctx.fillStyle=fillColor;
+    ctx.fillRect(x1,yHi,x2-x1,yLo-yHi);
+    ctx.strokeStyle=fgColor;ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(left,yHi);ctx.lineTo(right,yHi);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(left,yLo);ctx.lineTo(right,yLo);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x1,top);ctx.lineTo(x1,bottom);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x2,top);ctx.lineTo(x2,bottom);ctx.stroke();
+    ctx.setLineDash([]);
+    // Stats
+    const priceChange=ePrice-sPrice;
+    const pctChange=sPrice!==0?(priceChange/sPrice*100):0;
+    const barCount=Math.abs(hiIdx-loIdx);
+    let calDays=0;
+    const d1=_blOhlcv[Math.max(0,Math.min(Math.round(loIdx),_blOhlcv.length-1))];
+    const d2=_blOhlcv[Math.max(0,Math.min(Math.round(hiIdx),_blOhlcv.length-1))];
+    if(d1?.t&&d2?.t) calDays=Math.round(Math.abs(new Date(d2.t)-new Date(d1.t))/864e5);
+    let volSum=0;
+    const i1r=Math.max(0,Math.round(loIdx)),i2r=Math.min(_blOhlcv.length-1,Math.round(hiIdx));
+    for(let i=i1r;i<=i2r;i++) volSum+=Number(_blOhlcv[i]?.v)||0;
+    const volFmt=volSum>=1e9?(volSum/1e9).toFixed(2)+'B':volSum>=1e6?(volSum/1e6).toFixed(2)+'M':volSum>=1e3?(volSum/1e3).toFixed(1)+'K':String(Math.round(volSum));
+    const line1=`${priceChange.toFixed(2)} (${pctChange.toFixed(2)}%) ${Math.round(priceChange*100)}`;
+    const line2=`${barCount} bars, ${calDays}d`;
+    const line3=`Vol ${volFmt}`;
+    // Tooltip box
+    ctx.font='600 11px \'JetBrains Mono\',monospace';
+    const tw=Math.max(ctx.measureText(line1).width,ctx.measureText(line2).width,ctx.measureText(line3).width);
+    const bw=tw+24,bh=56,bpad=10;
+    let bx=(x1+x2)/2-bw/2;
+    let by=isUp?yHi-bh-10:yLo+10;
+    if(isUp&&by<top+4) by=yLo+10;
+    if(!isUp&&by+bh>bottom-4) by=yHi-bh-10;
+    bx=Math.max(left+2,Math.min(bx,right-bw-2));
+    by=Math.max(top+2,Math.min(by,bottom-bh-2));
+    const bg=isUp?'rgba(21,101,192,0.95)':'rgba(183,28,28,0.95)';
+    ctx.fillStyle=bg;
+    const r=6;
+    ctx.beginPath();
+    ctx.moveTo(bx+r,by);ctx.lineTo(bx+bw-r,by);ctx.arcTo(bx+bw,by,bx+bw,by+r,r);
+    ctx.lineTo(bx+bw,by+bh-r);ctx.arcTo(bx+bw,by+bh,bx+bw-r,by+bh,r);
+    ctx.lineTo(bx+r,by+bh);ctx.arcTo(bx,by+bh,bx,by+bh-r,r);
+    ctx.lineTo(bx,by+r);ctx.arcTo(bx,by,bx+r,by,r);
+    ctx.closePath();ctx.fill();
+    ctx.fillStyle='#ffffff';ctx.textBaseline='top';
+    ctx.fillText(line1,bx+bpad,by+bpad);
+    ctx.fillText(line2,bx+bpad,by+bpad+17);
+    ctx.fillText(line3,bx+bpad,by+bpad+34);
+    ctx.restore();
+  }
+};
+
 let _blReversals=[];
 let _blEarnings=[];
 const _candleHollow=true;
@@ -8839,9 +10446,14 @@ const reversalPlugin={
   afterDatasetsDraw(chart){
     if(!_blShowReversals||!_blReversals.length||!_blOhlcv.length)return;
     const {ctx,scales:{x,y},chartArea}=chart;
+    // In volcndle mode with consistent gaps the bars are drawn at vcLayout positions,
+    // not at the uniform Chart.js X-scale positions — use the same layout for signals.
+    const vcLayout=(String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps)
+      ?_buildVcLayout(chart):null;
     ctx.save();
     _blReversals.forEach(r=>{
-      const xPx=x.getPixelForValue(r._idx);
+      const vcBar=vcLayout?vcLayout.get(r._idx):null;
+      const xPx=vcBar?vcBar.cx:x.getPixelForValue(r._idx);
       const style=_sigStyles[r.t]||_sigStyles.gi_rev;
       const {color,sz,off}=style;
       if(xPx<x.left-sz||xPx>x.right+sz)return;
@@ -8998,6 +10610,26 @@ const projectionPlugin={
     const anchorOffset=Math.min(Math.max(0,_blProjLookback||0),Math.max(0,lastIdx));
     const anchorIdx=Math.max(0,lastIdx-anchorOffset);
     const isPast=anchorOffset>0;
+    // In volcndle mode with consistent gaps, bars sit at custom positions from _buildVcLayout.
+    // Use the layout so hash lines are centered on the actual rendered candle.
+    const _projVcLayout=(String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps)
+      ?_buildVcLayout(chart):null;
+    // Returns [hx0, hx1] centered on the bar at idx, using vcLayout when available.
+    function _projHashExtent(idx){
+      if(_projVcLayout){
+        const bar=_projVcLayout.get(idx);
+        if(bar){ const hw=Math.max(4,bar.w/2); return [bar.cx-hw, bar.cx+hw]; }
+        const slotPx=Math.abs(x.getPixelForValue(1)-x.getPixelForValue(0));
+        const cx=x.getPixelForValue(idx);
+        return [cx-Math.max(4,slotPx/2), cx+Math.max(4,slotPx/2)];
+      }
+      // Use actual bar element width from Chart.js metadata; fall back to slot estimate
+      const cx=x.getPixelForValue(idx);
+      const slotPx=Math.abs(x.getPixelForValue(1)-x.getPixelForValue(0));
+      const el=chart.getDatasetMeta(0)?.data?.[idx];
+      const hw=Math.max(4,(el&&Number.isFinite(el.width)&&el.width>0)?el.width/2:slotPx*0.4);
+      return [cx-hw, cx+hw];
+    }
     ctx.save();
     ctx.font='600 9.5px JetBrains Mono,monospace';
     ctx.textBaseline='middle';
@@ -9010,21 +10642,18 @@ const projectionPlugin={
       if(days===0&&p.label==='Target'){
         // Sizer target — drawn at anchor, gated by stop-line toggle (same as Stop)
         if(!_blShowStopLine)return;
-        hx0=x.getPixelForValue(anchorIdx-1);
-        hx1=x.getPixelForValue(anchorIdx+1);
+        [hx0,hx1]=_projHashExtent(anchorIdx);
         lbl='Target $'+p.price.toFixed(2);
       }else if(days===0){
         // PT Stop line — drawn at anchor
         if(!_blShowStopLine)return;
-        hx0=x.getPixelForValue(anchorIdx-1);
-        hx1=x.getPixelForValue(anchorIdx+1);
+        [hx0,hx1]=_projHashExtent(anchorIdx);
         lbl='Stop $'+p.price.toFixed(2);
       }else{
         // Target: hash centered on anchorIdx+days
         if(!_blShowTargetLines)return;
         const tIdx=anchorIdx+days;
-        hx0=x.getPixelForValue(tIdx-1);
-        hx1=x.getPixelForValue(tIdx+1);
+        [hx0,hx1]=_projHashExtent(tIdx);
         lbl=p.label;
       }
       // Clamp to chart area
@@ -9064,12 +10693,15 @@ const earningsPlugin={
   afterDatasetsDraw(chart){
     if(!_blShowEarnings||!_blEarnings.length||!_blOhlcv.length)return;
     const {ctx,scales:{x},chartArea:{bottom}}=chart;
+    const vcLayout=(String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps)
+      ?_buildVcLayout(chart):null;
     const sz=9,pad=4;
     ctx.save();
     ctx.textAlign='center';
     ctx.textBaseline='middle';
     _blEarnings.forEach(e=>{
-      const xPx=x.getPixelForValue(e._idx);
+      const vcBar=vcLayout?vcLayout.get(e._idx):null;
+      const xPx=vcBar?vcBar.cx:x.getPixelForValue(e._idx);
       const hw=sz*0.75,hh=sz*0.7;
       if(xPx<x.left-hw||xPx>x.right+hw)return;
       const yPx=bottom-hh-pad;
@@ -9118,12 +10750,77 @@ const giOverlayPlugin={
     ctx.lineWidth=Math.max(1.8,1.5);
     ctx.lineJoin='round';
     ctx.lineCap='round';
+    // In volcndle mode the bars are drawn at vcLayout positions, not uniform X-scale positions
+    const _vcLayoutOv=(String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps)
+      ?_buildVcLayout(chart):null;
     // Draw segment-by-segment so each segment is colored by its GI value
     const visPts=_giPts.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.v)&&p.x>=x.min-1&&p.x<=x.max+1);
     for(let i=0;i<visPts.length-1;i++){
       const a=visPts[i], b=visPts[i+1];
-      const ax=x.getPixelForValue(a.x), ay=yForGI(a.v);
-      const bx=x.getPixelForValue(b.x), by=yForGI(b.v);
+      const _vcA=_vcLayoutOv?_vcLayoutOv.get(Math.round(a.x)):null;
+      const _vcB=_vcLayoutOv?_vcLayoutOv.get(Math.round(b.x)):null;
+      const ax=_vcA?_vcA.cx:x.getPixelForValue(a.x), ay=yForGI(a.v);
+      const bx=_vcB?_vcB.cx:x.getPixelForValue(b.x), by=yForGI(b.v);
+      ctx.beginPath();
+      ctx.strokeStyle=giColorForValue((a.v+b.v)/2);
+      ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+// Lower-panel GI chart line drawer — ALWAYS uses the MAIN chart's screen coordinates
+// so the GI line stays in lockstep with the candles above, regardless of chart type.
+//
+// Strategy: compute each line vertex's ABSOLUTE SCREEN X from blChart, then convert
+// it back to giHistChart's canvas coordinates by subtracting the canvas offset
+// difference. This is bullet-proof against any sub-pixel difference in the two
+// charts' chartArea bounds, axis padding, canvas widths, or DOM positioning.
+const giLowerVcPlugin={
+  id:'giLowerVcPlugin',
+  afterDatasetsDraw(chart){
+    if(!_giPts.length) return;
+    if(!blChart||!blChart.scales||!blChart.scales.x) return;
+    if(!blChart.canvas||!chart.canvas) return;
+    const {ctx,scales:{y},chartArea}=chart;
+    const blX=blChart.scales.x;
+    if(!blX||!y) return;
+    // Measure horizontal offset between the two canvases (in CSS pixels).
+    // If giHistChart's canvas starts further right than blChart's by N px,
+    // we need to draw N px to the LEFT in giHistChart to land at the same screen X.
+    const blRect=blChart.canvas.getBoundingClientRect();
+    const giRect=chart.canvas.getBoundingClientRect();
+    const offsetX=giRect.left-blRect.left;            // typically 0; non-zero corrects misalignment
+    const isVc=String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps&&_blOhlcv.length;
+    const vcLayout=isVc?_buildVcLayout(blChart):null;
+    // Use blChart's x.min/max for visibility filter so the line range matches the candles
+    const xMin=Number.isFinite(blX.min)?blX.min:0;
+    const xMax=Number.isFinite(blX.max)?blX.max:(_giPts.length-1);
+    const visPts=_giPts.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.v)&&p.x>=xMin-1&&p.x<=xMax+1);
+    if(visPts.length<2) return;
+    ctx.save();
+    // Clip to plot area so line ends don't bleed outside
+    ctx.beginPath();
+    ctx.rect(chartArea.left,chartArea.top,chartArea.right-chartArea.left,chartArea.bottom-chartArea.top);
+    ctx.clip();
+    ctx.lineWidth=Math.max(2.2,1.5);
+    ctx.lineJoin='round';
+    ctx.lineCap='round';
+    // Pixel resolver: blChart's canvas-X for value, then translate to giHistChart's canvas-X
+    const pxFor=v=>{
+      let px;
+      if(vcLayout){
+        const vc=vcLayout.get(Math.round(v));
+        px=vc?vc.cx:blX.getPixelForValue(v);
+      } else {
+        px=blX.getPixelForValue(v);
+      }
+      return px-offsetX;                              // translate to giHistChart canvas
+    };
+    // Draw segment-by-segment so each segment is colored by its GI value
+    for(let i=0;i<visPts.length-1;i++){
+      const a=visPts[i], b=visPts[i+1];
+      const ax=pxFor(a.x), ay=y.getPixelForValue(a.v);
+      const bx=pxFor(b.x), by=y.getPixelForValue(b.v);
       ctx.beginPath();
       ctx.strokeStyle=giColorForValue((a.v+b.v)/2);
       ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
@@ -9211,6 +10908,129 @@ const indicatorPlugin={
         const py=y.getPixelForValue(v);
         if(!started){ctx.moveTo(px,py);started=true;} else ctx.lineTo(px,py);
       });
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+};
+const trendlinePlugin={
+  id:'trendlinePlugin',
+  afterDatasetsDraw(chart){
+    if(!_blShowTrendlines||!_blOhlcv.length)return;
+    const data=blTrendlineSeries();
+    if(!data) return;
+    const {ctx,scales:{x,y},chartArea}=chart;
+    const lastIdx=_blOhlcv.length-1;
+    // Visible x range in data (bar-index) space. Clip endpoints into this range
+    // so we never hand Chart.js an off-screen index (its extrapolation can clamp).
+    const viewMin=Number(x.min), viewMax=Number(x.max);
+    if(!Number.isFinite(viewMin)||!Number.isFinite(viewMax)) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right-chartArea.left, chartArea.bottom-chartArea.top);
+    ctx.clip();
+    const draw=(lines, color)=>{
+      lines.forEach(ln=>{
+        if(ln.broken && !_blShowBrokenTrendlines) return;
+        const lineLeft=ln.p1.i;
+        const lineRight=ln.broken ? ln.brokenAt : lastIdx;
+        // Intersect [lineLeft,lineRight] with [viewMin,viewMax]
+        const startI=Math.max(lineLeft, viewMin);
+        const endI=Math.min(lineRight, viewMax);
+        if(endI<=startI) return;
+        const startY=ln.intercept + ln.slope*startI;
+        const endY=ln.intercept + ln.slope*endI;
+        const px1=x.getPixelForValue(startI);
+        const py1=y.getPixelForValue(startY);
+        const px2=x.getPixelForValue(endI);
+        const py2=y.getPixelForValue(endY);
+        if(![px1,py1,px2,py2].every(Number.isFinite)) return;
+        ctx.beginPath();
+        ctx.moveTo(px1,py1);
+        ctx.lineTo(px2,py2);
+        if(ln.broken){
+          ctx.strokeStyle=blHexToRgba(_blTrendBrokenColor,0.55);
+          ctx.setLineDash([4,3]);
+          ctx.lineWidth=1;
+        } else {
+          // Weight by significance: scale lineWidth and alpha by touch count when toggle on.
+          // Touches range ~2 (minimum) to ~8+ (very significant).
+          // t=2 → 0.8px / alpha 0.60;  t=5 → 2.0px / alpha 0.84;  t=8+ → capped ~3px / 0.95
+          // Both values are then multiplied by the scale factor (10%–100%) so the user
+          // can dim everything proportionally — insignificant lines almost vanish first.
+          const tScale = _blTrendWeightByScore ? _blTrendWeightScale / 100 : 1;
+          const tw = _blTrendWeightByScore
+            ? Math.min(3.0, 0.4 + ln.touches * 0.32) * tScale
+            : 1.2;
+          const ta = _blTrendWeightByScore
+            ? Math.min(0.95, 0.44 + ln.touches * 0.065) * tScale
+            : 0.85;
+          ctx.strokeStyle=blHexToRgba(color, ta);
+          ctx.setLineDash([]);
+          ctx.lineWidth=Math.max(0.3, tw);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Draw anchor dots at p1 and p2 so users can see exactly which wicks
+        // the trendline is pinned to. Only draw if the pivot is in the visible range.
+        // Dot radius also scales with significance when weight mode is on.
+        const dotColor = ln.broken ? blHexToRgba(_blTrendBrokenColor,0.55) : blHexToRgba(color,0.92);
+        const dotR = _blTrendWeightByScore && !ln.broken
+          ? Math.max(0.5, Math.min(5, 1.5 + ln.touches*0.35) * (_blTrendWeightScale/100))
+          : 3;
+        [[ln.p1.i, ln.p1.price],[ln.p2.i, ln.p2.price]].forEach(([pi, pr])=>{
+          if(pi < viewMin || pi > viewMax) return;
+          const dpx=x.getPixelForValue(pi);
+          const dpy=y.getPixelForValue(pr);
+          if(!Number.isFinite(dpx)||!Number.isFinite(dpy)) return;
+          ctx.beginPath();
+          ctx.arc(dpx, dpy, dotR, 0, Math.PI*2);
+          ctx.fillStyle=dotColor;
+          ctx.fill();
+        });
+      });
+    };
+    draw(data.descending, _blTrendDownColor);
+    draw(data.ascending, _blTrendUpColor);
+    ctx.restore();
+  }
+};
+const srLinesPlugin={
+  id:'srLinesPlugin',
+  afterDatasetsDraw(chart){
+    if(!_blShowSRLines || !_blOhlcv.length) return;
+    const data=blSRLevels();
+    if(!data || !data.levels.length) return;
+    const {ctx,scales:{y},chartArea}=chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right-chartArea.left, chartArea.bottom-chartArea.top);
+    ctx.clip();
+    // Pre-compute max touches so we can normalise when weight mode is on.
+    const srMaxT = data.levels.reduce((m,lv)=>Math.max(m,lv.touches), 1);
+    data.levels.forEach(lv=>{
+      const py=y.getPixelForValue(lv.price);
+      if(!Number.isFinite(py)) return;
+      let alpha, width;
+      if(_blSRWeightByTouches){
+        // Normalise touches 0→1 against the strongest level on screen,
+        // then map to a visible range: thinnest 0.6px/20% → thickest 3px/90%.
+        // Both are multiplied by srScale so the user can dim all lines together —
+        // weak lines (norm≈0) drop toward invisible first, strong lines follow.
+        const norm = srMaxT > 1 ? (lv.touches - 1) / (srMaxT - 1) : 1;
+        const srScale = _blSRWeightScale / 100;
+        alpha = (0.20 + norm * 0.70) * srScale;   // scaled 0.20–0.90
+        width = Math.max(0.3, (0.6 + norm * 2.4) * srScale);  // scaled 0.6–3.0px
+      } else {
+        alpha = 0.65;
+        width = 1.0;
+      }
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, py);
+      ctx.lineTo(chartArea.right, py);
+      ctx.strokeStyle=blHexToRgba(_blSRColor, alpha);
+      ctx.lineWidth=width;
+      ctx.setLineDash([]);
       ctx.stroke();
     });
     ctx.restore();
@@ -9525,7 +11345,16 @@ function blOpenTicker(ticker){
   blSetCurrentTicker(q);
   blHideTickerMenu();
   renderBuyLevels();
-  blFetchLiveQuoteOnce(q);  // always fetch current price when opening a ticker
+  // Don't fetch a live quote here — that would update *only* this symbol and
+  // cause the watchlist to re-sort asymmetrically. The auto-refresh timer
+  // (blLivePollOnce) polls every watchlist symbol together, so prices stay
+  // uniform across the list. If the live cache is empty (e.g. a symbol just
+  // typed in that isn't on any watchlist), the next timer tick will pick it up.
+  //
+  // However, if the cached OHLCV bars are stale (last bar older than yesterday),
+  // silently refresh in the background so cross-tab navigation always shows
+  // current data. _bgRefreshOhlcv does NOT touch live quotes or watchlist order.
+  _blRefreshOhlcvIfStale(q);
   if(inp){
     try{ inp.setSelectionRange(inp.value.length, inp.value.length); }catch(_e){}
     if(document.activeElement===inp){
@@ -9533,6 +11362,27 @@ function blOpenTicker(ticker){
     }
   }
   return true;
+}
+// Silently refresh OHLCV bars when cached data is stale (last bar older than
+// yesterday).  Safe to call from blOpenTicker — uses _bgRefreshOhlcv which
+// never fetches a live quote and never re-sorts the watchlist.
+function _blRefreshOhlcvIfStale(sym){
+  const rows=CANDLE_DATA[sym];
+  if(!rows||!rows.length) return; // genuinely missing — blEnsureTickerOHLCV handles it
+  const lastDate=String(rows[rows.length-1]?.t||'');
+  if(!lastDate) return;
+  // Build yesterday's ISO date string (YYYY-MM-DD) as the staleness threshold.
+  // If the last bar is from before yesterday the cache is missing at least one
+  // trading day and needs a refresh.
+  const yesterday=new Date();
+  yesterday.setDate(yesterday.getDate()-1);
+  const threshold=yesterday.toISOString().slice(0,10);
+  if(lastDate>=threshold) return; // recent enough, skip
+  _bgRefreshOhlcv(sym).then(fresh=>{
+    if(fresh.length&&blCurrentTicker()===sym){
+      if(!_blSilentUpdateChart(sym)) renderBuyLevels().catch(()=>{});
+    }
+  }).catch(()=>{});
 }
 
 let _blTypeAhead='';
@@ -9789,24 +11639,7 @@ function iApplySortFromMovedControl(){
   iUpdateHeaderSort(iSt.sc,iSt.sd);
 }
 
-function iWinDaysFromSelect(){
-  const sel=document.getElementById('iWinDaysSelect');
-  const hidden=document.getElementById('iWinDays');
-  if(sel&&hidden) hidden.value=sel.value;
-}
-function iApplyLookbackFromMovedControl(){
-  const lookbackEl=document.getElementById('blLookback');
-  const hiddenEl=document.getElementById('iWinDays');
-  const selEl=document.getElementById('iWinDaysSelect');
-  if(!lookbackEl) return;
-  const days=parseInt(lookbackEl.value)||365;
-  if(hiddenEl) hiddenEl.value=String(days);
-  // Sync the dropdown if the value matches one of its options
-  if(selEl){
-    const opt=Array.from(selEl.options).find(o=>parseInt(o.value)===days);
-    if(opt) selEl.value=String(days);
-  }
-}
+function iApplyLookbackFromMovedControl(){ /* no-op — iFilter reads blLookback directly */ }
 
 function blSortChange(){
   blPullSavedControlState();
@@ -9876,7 +11709,7 @@ async function renderBuyLevels(){
   renderGISignalPanel(ticker);
   const ohlcv=allOhlcv; // EOD data from backend is always trusted - no filtering
   if(!ohlcv.length)return;
-  _blOhlcv=ohlcv; _blVsaCache=null; _blIndCache=null;
+  _blOhlcv=ohlcv; _blVsaCache=null; _blIndCache=null; _blTrendlineCache=null; _blSRLevelsCache=null;
   // Apply any cached live quote now that CANDLE_DATA is loaded.
   // Fixes the race where the first Schwab poll fires before data arrives.
   const _lq=_blLiveQuoteCache[ticker];
@@ -9964,9 +11797,17 @@ async function renderBuyLevels(){
   const yLoAll=Math.min(...allY);
   const yHiAll=Math.max(...allY);
   const span=(yHiAll-yLoAll||1);
-  const padTop=Math.max(0.01,span*(_blMarginTopPct/100));
-  const padBottom=Math.max(0.01,span*(_blMarginBotPct/100));
-  const yMin=Math.max(0,yLoAll-padBottom),yMax=yHiAll+padTop;
+  let yMin,yMax;
+  if(_blLogScale){
+    const ll=Math.log(Math.max(0.001,yLoAll)),lh=Math.log(Math.max(0.001,yHiAll));
+    const ls=Math.max(0.001,lh-ll);
+    yMin=Math.max(0.001,Math.exp(ll-ls*(_blMarginBotPct/100)));
+    yMax=Math.exp(lh+ls*(_blMarginTopPct/100));
+  }else{
+    const padTop=Math.max(0.01,span*(_blMarginTopPct/100));
+    const padBottom=Math.max(0.01,span*(_blMarginBotPct/100));
+    yMin=Math.max(0,yLoAll-padBottom); yMax=yHiAll+padTop;
+  }
   const tickerChanged=ticker!==_blRenderedTicker;
   // Reset lookback to "Now" whenever the user switches to a different ticker
   if(tickerChanged && _blProjLookback!==0){ blSetLookback(0); }
@@ -10059,9 +11900,12 @@ async function renderBuyLevels(){
         const bh=14,bw=16,pad=4;
         const hitY=bottom-bh/2-pad;
         if(Math.abs(yPx-hitY)>bh+4) return;
+        const _clickVcLayout=(String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps)
+          ?_buildVcLayout(blChart):null;
         let hit=null;
         _blEarnings.forEach(e=>{
-          const ex=scales.x.getPixelForValue(e._idx);
+          const _vcBar=_clickVcLayout?_clickVcLayout.get(e._idx):null;
+          const ex=_vcBar?_vcBar.cx:scales.x.getPixelForValue(e._idx);
           if(Math.abs(xPx-ex)<=bw/2+6) hit=e;
         });
         if(!hit) return;
@@ -10123,7 +11967,7 @@ async function renderBuyLevels(){
               return mo[m];
             }
           }},
-        y:{position:'right',min:yMin,max:yMax,
+        y:{type:_blLogScale?'logarithmic':'linear',position:'right',min:yMin,max:yMax,
           grid:{display:false},
           border:{display:false},
           afterFit(scale){scale.paddingLeft=4;},
@@ -10133,11 +11977,17 @@ async function renderBuyLevels(){
             maxTicksLimit:10,
             includeBounds:false,
             padding:4,
-            callback:v=>v.toFixed(2)
+            callback:v=>{
+              if(_blLogScale){
+                const s=v>=1000?v.toFixed(0):v>=100?v.toFixed(1):v>=10?v.toFixed(2):v.toFixed(3);
+                return s;
+              }
+              return v.toFixed(2);
+            }
           }},
       },
     },
-    plugins:[yAxisBackgroundPlugin,volumePlugin,indicatorPlugin,wickPlugin,buyLinePlugin,priceLabelPlugin,todayChangePlugin,extendedHoursPlugin,crosshairPlugin,reversalPlugin,earningsPlugin,projectionPlugin,giOverlayPlugin,blLookbackSyncPlugin],
+    plugins:[yAxisBackgroundPlugin,volumePlugin,indicatorPlugin,srLinesPlugin,trendlinePlugin,wickPlugin,buyLinePlugin,priceLabelPlugin,todayChangePlugin,extendedHoursPlugin,crosshairPlugin,reversalPlugin,earningsPlugin,projectionPlugin,giOverlayPlugin,blLookbackSyncPlugin,measurePlugin],
   });
   if(!canvas._blDblClickBound){ canvas.addEventListener('dblclick', blResetChartZoom); canvas._blDblClickBound=true; }
   if(!canvas._blWheelBound){
@@ -10240,11 +12090,14 @@ function renderGIChart(ticker){
   const xMax=blChart&&blChart.scales&&Number.isFinite(blChart.scales.x.max)?blChart.scales.x.max:Math.max(0,_blOhlcv.length?_blOhlcv.length-1:_giPts.length-1);
   giHistChart=new Chart(ctx2,{
     type:'line',
-    plugins:[crosshairPlugin],
+    plugins:[crosshairPlugin,giLowerVcPlugin],
     data:{
       datasets:[{
         data:_giPts.map(d=>({x:d.x,y:d.v})),
-        borderColor:ctx=>giLineGradient(ctx.chart,ctx.chart.scales.y),
+        // Hide the default Chart.js line — giLowerVcPlugin draws it manually using
+        // the MAIN chart's getPixelForValue() so the two charts align pixel-perfectly
+        // regardless of any sub-pixel differences in their respective x-scales.
+        borderColor:'rgba(0,0,0,0)',
         borderWidth:Math.max(2.2,1.5),pointRadius:0,fill:false,tension:0,
         borderCapStyle:'round',borderJoinStyle:'round'
       }]
@@ -10276,10 +12129,14 @@ function renderGIChart(ticker){
                const m=parseInt(t.slice(5,7),10)-1;
                return m===0?t.slice(0,4):mo[m];
              }}},
-        y:{min:yMin,max:yMax,position:'right',
+        y:{type:_blLogScale?'logarithmic':'linear',min:yMin,max:yMax,position:'right',
            afterFit:axis=>{
+             // Match blChart's y-axis dimensions EXACTLY so both charts have identical
+             // chartArea bounds (and therefore identical pixel-per-unit ratios).
+             // blChart sets paddingLeft=4 in its own afterFit — must replicate that here.
              const ref=blChart&&blChart.scales&&blChart.scales.y;
              if(ref&&Number.isFinite(ref.width)&&ref.width>0) axis.width=ref.width;
+             axis.paddingLeft=4;
            },
            grid:{display:false},
            ticks:{display:false}}
@@ -10849,7 +12706,29 @@ function renderGISPPositionSizer(ticker,zone){
     out.innerHTML='<div class="gisp-sizer-note">Select a ticker to size from the current chart stop.</div>';
     return;
   }
-  const entryPrice=gispLastClose(key);
+  // When lookback > 0 the user is reviewing a historical setup — use the price
+  // and GI zone at the anchor bar so auto stop/target percentages match exactly
+  // what gispCalc() computed for the chart projection lines.
+  // (At lookback=0 everything falls back to current close/zone, same as before.)
+  const _sizerOhlcv=getCandleData()[key]||_blOhlcv||[];
+  let entryPrice=gispLastClose(key);
+  let effectiveZone=zone;
+  if(_blProjLookback>0&&_sizerOhlcv.length>0){
+    const _lastIdx=_sizerOhlcv.length-1;
+    const _anchorOffset=Math.min(Math.max(0,_blProjLookback),Math.max(0,_lastIdx));
+    const _anchorIdx=Math.max(0,_lastIdx-_anchorOffset);
+    const _anchorClose=Number(_sizerOhlcv[_anchorIdx]?.c);
+    if(Number.isFinite(_anchorClose)&&_anchorClose>0) entryPrice=_anchorClose;
+    // Resolve the GI zone the ticker was actually in on the anchor date — mirrors
+    // gispCalc()'s effectiveZone logic so the stop/target % is historically accurate.
+    const _anchorDate=String(_sizerOhlcv[_anchorIdx]?.t||'');
+    if(_anchorDate){
+      const _giHist=(getGIHistory()[key]||[]).slice().sort((a,b)=>a.t.localeCompare(b.t));
+      for(let i=_giHist.length-1;i>=0;i--){
+        if(_giHist[i].t<=_anchorDate){effectiveZone=scoreToZone(Number(_giHist[i].v));break;}
+      }
+    }
+  }
   const atr=gispCalcATR(14);
   const atrStopPrice=(Number.isFinite(entryPrice)&&entryPrice>0&&Number.isFinite(atr)&&atr>0)
     ? Math.round((entryPrice-atr*1.0)*100)/100 : NaN;
@@ -10896,7 +12775,7 @@ function renderGISPPositionSizer(ticker,zone){
   let autoStopPrice=atrStopPrice;
   let autoStopSrc='ATRx1';
   if(!usingManualStop){
-    const btStop=computeOptimalZoneStop(key,zone)||computeOptimalTickerStop(key);
+    const btStop=computeOptimalZoneStop(key,effectiveZone)||computeOptimalTickerStop(key);
     if(btStop&&Number.isFinite(entryPrice)&&entryPrice>0){
       const bsPrice=Math.round(entryPrice*(1-btStop.stopPct/100)*100)/100;
       if(bsPrice>0&&bsPrice<entryPrice){ autoStopPrice=bsPrice; autoStopSrc=`BT ${btStop.stopPct}%${btStop.fallback?' (any zone)':''}`; }
@@ -10950,8 +12829,8 @@ function renderGISPPositionSizer(ticker,zone){
   const positionPct=accountValue>0?(positionValue/accountValue*100):0;
   const sharesClass=isCapped?'gisp-value-neu':'gisp-value-pos';
   // Resolve target: manual → backtest zone → 2R from stop → nothing
-  const btForTarget=computeBacktest(key,zone);
-  const targetChoice=computeOptimalZoneTarget(key,zone,btForTarget||null);
+  const btForTarget=computeBacktest(key,effectiveZone);
+  const targetChoice=computeOptimalZoneTarget(key,effectiveZone,btForTarget||null);
   const btTargetPrice=(Number.isFinite(entryPrice)&&targetChoice)?Math.round(entryPrice*(1+targetChoice.ret/100)*100)/100:NaN;
   let autoTargetPrice=btTargetPrice;
   let autoTargetSrc=targetChoice?targetChoice.label:'';
@@ -11083,7 +12962,13 @@ function renderGISPBacktest(ticker,zone){
   if(bt){
     const wc=bt.winRate>=50?'var(--green)':'var(--red)';
     const ohlcv=getCandleData()[ticker]||[];
-    const lastClose=ohlcv.length?ohlcv[ohlcv.length-1].c:null;
+    // Use anchor price (respects lookback) so the displayed stop/target match the chart lines
+    let lastClose=ohlcv.length?ohlcv[ohlcv.length-1].c:null;
+    if(_blProjLookback>0&&ohlcv.length>0){
+      const _lastIdx=ohlcv.length-1;
+      const _anchorClose=Number(ohlcv[Math.max(0,_lastIdx-Math.min(_blProjLookback,_lastIdx))]?.c);
+      if(Number.isFinite(_anchorClose)&&_anchorClose>0) lastClose=_anchorClose;
+    }
     const stopChoice=computeOptimalZoneStop(ticker,zone) || computeOptimalTickerStop(ticker);
     const targetChoice=computeOptimalZoneTarget(ticker,zone,bt);
     const targetPrice=(lastClose&&targetChoice)?lastClose*(1+targetChoice.ret/100):null;
@@ -11237,14 +13122,19 @@ function renderGISignalPanel(ticker){
 }
 
 // -- TAB 6: GI ZONE RETURNS --
-// retCell returns a full <td> with gradient background (same style as Themes tab)
-function retCell(v,scale){
-  if(v==null||!Number.isFinite(v)) return '<td><span class="muted">-</span></td>';
-  const bg=thRetBg(v,scale||12);
-  const sign=v>=0?'+':'';
-  const fw=Math.abs(v)>=5?'700':'400';
-  const inner=`<span style="color:#f0f0f0;font-family:var(--mono);font-size:12px;font-weight:${fw}">${sign}${v.toFixed(2)}%</span>`;
-  return bg?`<td style="background:${bg};padding:0 8px">${inner}</td>`:`<td>${inner}</td>`;
+function retCell(v, scale){
+  if(v==null||!Number.isFinite(v)){
+    return `<td style="text-align:right;color:#5a5a5a"><span style="font-family:var(--mono);font-size:12.5px">—</span></td>`;
+  }
+  const sign = v>=0?'+':'';
+  const t = Math.abs(v)/(scale||12);
+  const strong = t >= 0.6;
+  let color, weight;
+  if (v > 0) { color = strong ? '#7ee894' : '#5dd17a'; }
+  else if (v < 0) { color = strong ? '#ff8377' : '#ef6f63'; }
+  else { color = '#5a5a5a'; }
+  weight = strong ? 600 : 500;
+  return `<td style="text-align:right;padding:0 12px"><span style="color:${color};font-weight:${weight};font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;letter-spacing:.01em">${sign}${v.toFixed(2)}%</span></td>`;
 }
 const zrSt=Object.assign(mkState(ZR_DATA,'avg_20d',-1),{ps:25});
 _regSortSlot('zr',()=>zrSt);
@@ -11253,6 +13143,7 @@ function zrFilter(){
   const zone=document.getElementById('zrZone').value;
   const minN=parseInt(document.getElementById('zrMinN').value)||0;
   const ibPeriod=parseInt(document.getElementById('zrIBPeriod').value)||0;
+  _uiStateSave({zrZone:zone,zrMinN:String(document.getElementById('zrMinN').value),zrIBPeriod:String(document.getElementById('zrIBPeriod').value)});
   const cutoff=ibPeriod?Date.now()-ibPeriod*86400000:null;
   zrSt.filtered=ZR_DATA.filter(r=>{
     if(zone&&r.zone!==zone)return false;
@@ -11294,7 +13185,7 @@ function renderZR(){
       ${retCell(r.avg_20d,12)}
       ${retCell(r.avg_30d,18)}
       ${retCell(r.avg_50d,25)}
-      <td class="muted" style="font-size:10px">${r.n}</td>
+      <td class="muted" style="font-size:10px;text-align:center">${r.n}</td>
       <td style="text-align:center">${giBadge(r.gi_score,r.gi_tier)}</td>
     </tr>`).join('');
   mkPag(s,'zrPag','renderZR');
@@ -11307,7 +13198,7 @@ function rvFmtScore(v){
   if(v==null||!Number.isFinite(Number(v))) return '<span style="color:var(--muted)">—</span>';
   const n=Number(v);
   const c=n>=70?'var(--green)':n>=50?'var(--amber)':n>=30?'var(--orange)':'var(--red)';
-  const bar=Math.round(n/10);
+  const bar=Math.max(0, Math.min(10, Math.round(n/10)));
   const filled='█'.repeat(bar)+'░'.repeat(10-bar);
   return `<span style="color:${c};font-family:var(--mono);font-size:11px">${n.toFixed(1)}</span>`
         +`<span style="color:${c};font-family:var(--mono);font-size:9px;opacity:0.6;margin-left:4px">${filled}</span>`;
@@ -11416,12 +13307,6 @@ function rvSavePrefs(){
   try{
     const p={
       strategy: document.getElementById('rvStrategy')?.value||'',
-      source:   document.getElementById('rvSource')?.value||'BOTH',
-      family:   document.getElementById('rvFamily')?.value||'',
-      mode:     document.getElementById('rvMode')?.value||'',
-      tgt:      document.getElementById('rvTgt')?.value||'',
-      atrm:     document.getElementById('rvAtrM')?.value||'',
-      today:    !!(document.getElementById('rvToday')?.checked),
       sc:       rvSt.sc,
       sd:       rvSt.sd,
     };
@@ -11435,45 +13320,57 @@ function rvLoadPrefs(){
     const p=JSON.parse(raw);
     const set=(id,val)=>{ const el=document.getElementById(id); if(el&&val!=null) el.value=val; };
     set('rvStrategy', p.strategy);
-    set('rvSource',   p.source);
-    set('rvFamily',   p.family);
-    set('rvMode',     p.mode);
-    set('rvTgt',      p.tgt);
-    set('rvAtrM',     p.atrm);
-    const todayEl=document.getElementById('rvToday');
-    if(todayEl) todayEl.checked=!!p.today;
     if(p.sc) rvSt.sc=p.sc;
     if(p.sd) rvSt.sd=p.sd;
   }catch(_e){}
+}
+function rvStrategyKey(r){
+  const src=String(r?.signal_source||'').toUpperCase()||'UNKNOWN';
+  const mode=String(r?.signal_mode||'').toLowerCase()||'unknown';
+  const fam=String(r?.signal_family||'').toLowerCase()||'unknown';
+  return `${src}|${mode}|${fam}`;
+}
+function rvStrategyLabelFromKey(key){
+  const [src,mode,fam]=String(key||'').split('|');
+  const srcLbl=src==='CUSTOM'?'Custom':(src||'Unknown');
+  const modeLbl=(mode||'').replaceAll('_',' ');
+  const famLbl=(fam||'').replaceAll('_',' ');
+  return `${srcLbl} / ${modeLbl || 'unknown'} / ${famLbl || 'unknown'}`;
+}
+function rvBuildStrategyOptions(){
+  const sel=document.getElementById('rvStrategy');
+  if(!sel) return;
+  const prev=sel.value||'';
+  const counts={};
+  (REVERSAL_ROWS||[]).forEach(r=>{
+    const k=rvStrategyKey(r);
+    counts[k]=(counts[k]||0)+1;
+  });
+  const keys=Object.keys(counts).sort((a,b)=>{
+    const da=counts[a]||0, db=counts[b]||0;
+    if(db!==da) return db-da;
+    return a.localeCompare(b);
+  });
+  sel.innerHTML='<option value="">All Signals</option>';
+  keys.forEach(k=>{
+    const opt=document.createElement('option');
+    opt.value=k;
+    opt.textContent=`${rvStrategyLabelFromKey(k)} (${counts[k]})`;
+    sel.appendChild(opt);
+  });
+  sel.value=keys.includes(prev)?prev:'';
 }
 function rvInit(){
   rvSt.all=REVERSAL_ROWS;
   rvSt.filtered=[...REVERSAL_ROWS];
   rvSt.sc='signal_date'; rvSt.sd=-1; rvSt.pg=1; rvSt.ps=50;
+  rvBuildStrategyOptions();
   rvLoadPrefs();
   document.querySelectorAll('#tab-reversals thead th').forEach(t=>{
     t.classList.remove('sort-asc','sort-desc');
     if(t.dataset.col===rvSt.sc) t.classList.add(rvSt.sd===1?'sort-asc':'sort-desc');
   });
   ensureSignalsData();
-}
-function rvStrategyFilter(pool, key){
-  if(!key) return pool;
-  // Score threshold (e.g. score_90)
-  const sm=key.match(/score_(\d+)/);
-  if(sm){ const ms=parseInt(sm[1]); pool=pool.filter(r=>(r.score||0)>=ms); }
-  // Entry filters (boolean fields)
-  if(key.indexOf('_conf3')!==-1)   pool=pool.filter(r=>(r.confirm_count||0)>=3);
-  else if(key.indexOf('_conf2')!==-1) pool=pool.filter(r=>(r.confirm_count||0)>=2);
-  else if(key.indexOf('_momrev')!==-1) pool=pool.filter(r=>r.above_prev_high&&r.gi_reversal);
-  else if(key.indexOf('_mom')!==-1)  pool=pool.filter(r=>r.above_prev_high);
-  else if(key.indexOf('_rev')!==-1)  pool=pool.filter(r=>r.gi_reversal);
-  else if(key.indexOf('_vol')!==-1)  pool=pool.filter(r=>r.vol_confirm);
-  else if(key.indexOf('_giacc')!==-1) pool=pool.filter(r=>r.gi_accel);
-  else if(key.indexOf('_atrok')!==-1) pool=pool.filter(r=>r.atr_regime_ok);
-  else if(key.indexOf('_clstr')!==-1) pool=pool.filter(r=>r.close_strength);
-  else if(key.indexOf('_gitrend')!==-1) pool=pool.filter(r=>r.gi_trend_up);
-  return pool;
 }
 function rvComputeRanks(pool){
   const byDay={};
@@ -11486,28 +13383,10 @@ function rvComputeRanks(pool){
 function rvFilter(){
   const q=(document.getElementById('rvS')?.value||'').trim().toUpperCase();
   const strat=(document.getElementById('rvStrategy')?.value||'');
-  const src=(document.getElementById('rvSource')?.value||'BOTH').toUpperCase();
-  const family=(document.getElementById('rvFamily')?.value||'').toLowerCase();
-  const mode=(document.getElementById('rvMode')?.value||'').toLowerCase();
-  const tgt=(document.getElementById('rvTgt')?.value||'');
-  const atrM=(document.getElementById('rvAtrM')?.value||'');
-  const todayOnly=document.getElementById('rvToday')?.checked;
-  // Apply strategy variant filter first, then compute per-day ranks
-  let pool=rvStrategyFilter(REVERSAL_ROWS.slice(), strat);
+  let pool=REVERSAL_ROWS.slice();
   rvComputeRanks(pool);
-  // Apply position limit (Top N/day) from strategy key prefix
-  const nMatch=strat?strat.match(/^(\d+)_/):null;
-  if(nMatch){ const nLim=parseInt(nMatch[1]); pool=pool.filter(r=>(r._rv_rank||999)<=nLim); }
   rvSt.filtered=pool.filter(r=>{
-    if(src!=='BOTH'&&rvNormSource(r.signal_source)!==src) return false;
-    if(family){
-      const f=String(r.signal_family||'').toLowerCase();
-      if(f!==family&&!(family==='continuation'&&f.includes('continuation'))) return false;
-    }
-    if(mode&&String(r.signal_mode||'').toLowerCase()!==mode) return false;
-    if(tgt){ const rt=r.target==null?'':String(r.target); if(rt!==tgt) return false; }
-    if(atrM&&String(r.atr_mult||'')!==atrM) return false;
-    if(todayOnly&&Number(r.days_ago)!==1) return false;
+    if(strat && rvStrategyKey(r)!==strat) return false;
     if(q&&!String(r.ticker||'').toUpperCase().includes(q)) return false;
     return true;
   });
@@ -11826,12 +13705,9 @@ function toggleIGroup(idx){
   renderI();
 }
 function iFilter(){
-  // Always keep iWinDays in sync with blLookback (blApplySavedControlState sets blLookback
-  // programmatically without firing onchange, so iWinDays can drift out of sync)
-  iApplyLookbackFromMovedControl();
   const q=document.getElementById('iS').value.trim().toLowerCase();
   const tit=document.getElementById('iTit').value;
-  const winDays=parseInt(document.getElementById('iWinDays').value)||30;
+  const winDays=parseInt(document.getElementById('blLookback')?.value)||30;
   const cutoff=new Date(Date.now()-winDays*86400000);
   iSt.filtered=INSIDERS.filter(r=>{
     if(q&&!r.ticker.toLowerCase().includes(q)&&!(r.company||'').toLowerCase().includes(q)&&!(r.insider||'').toLowerCase().includes(q)) return false;
@@ -11846,6 +13722,7 @@ function iSort(col){
   if(iSt.sc===col) iSt.sd*=-1; else{iSt.sc=col;iSt.sd=-1;}
   iUpdateHeaderSort(col,iSt.sd);
   iSyncMovedSortControl();
+  _saveTableSorts();
   iSt.pg=1; renderI();
 }
 function iGroupSortValue(g,col){
@@ -11953,8 +13830,10 @@ _regSortSlot('themes',()=>thSt);
 // Restore all table sort states now that every state object exists
 _restoreTableSorts();
 let _thCat='';
+(function(){try{const s=_uiStateLoad();if(s.thCat!==undefined)_thCat=s.thCat;}catch(_e){}})();
 function thSetCat(cat,btn){
   _thCat=cat;
+  _uiStateSave({thCat:cat});
   document.querySelectorAll('#tab-themes .th-cat-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   thFilter();
@@ -11973,6 +13852,7 @@ function thSort(col){
   if(thSt.sc===col) thSt.sd*=-1; else{thSt.sc=col;thSt.sd=-1;}
   syncSortSelect('thSortSel',col);
   document.querySelectorAll('#tab-themes thead th').forEach(t=>{t.classList.remove('sort-asc','sort-desc');if(t.dataset.col===col)t.classList.add(thSt.sd===1?'sort-asc':'sort-desc');});
+  _saveTableSorts();
   renderTh();
 }
 function thSortChange(){
@@ -11981,39 +13861,21 @@ function thSortChange(){
   document.querySelectorAll('#tab-themes thead th').forEach(t=>{t.classList.remove('sort-asc','sort-desc');if(t.dataset.col===col)t.classList.add('sort-desc');});
   renderTh();
 }
-// Gradient background for a return cell.
-// `scale` = the % value that maps to ~full saturation (varies per column).
-function thRetBg(v, scale){
-  if(v==null||!Number.isFinite(v)||v===0) return null;
-  // Ease curve: small moves stay subtle, large moves saturate quickly.
-  const t=Math.pow(Math.min(Math.abs(v)/scale, 1), 0.65);
-  // Interpolate from near-black base toward the target colour.
-  const base=16;
-  let r,g,b;
-  if(v>0){
-    // Target: rich forest green  rgb(20,100,50)
-    r=Math.round(base+t*(20 -base));
-    g=Math.round(base+t*(100-base));
-    b=Math.round(base+t*(50 -base));
-  } else {
-    // Target: deep crimson  rgb(130,25,25)
-    r=Math.round(base+t*(130-base));
-    g=Math.round(base+t*(25 -base));
-    b=Math.round(base+t*(25 -base));
-  }
-  return `rgb(${r},${g},${b})`;
-}
-// Full <td> for a return column — applies gradient bg, white text.
+// Text-only color for return cells. No background fills.
+// Scale = magnitude (in %) at which a move is considered "strong" → bumps weight + brightness.
 function thRetCell(v, scale){
   if(v==null||!Number.isFinite(v)){
-    return `<td><span class="muted">-</span></td>`;
+    return `<td style="text-align:right;color:#5a5a5a"><span style="font-family:var(--mono);font-size:12.5px">—</span></td>`;
   }
-  const bg=thRetBg(v, scale);
-  const sign=v>=0?'+':'';
-  const cell=`<span style="color:#f0f0f0;font-family:var(--mono)">${sign}${v.toFixed(2)}%</span>`;
-  return bg
-    ? `<td style="background:${bg};padding:0 10px">${cell}</td>`
-    : `<td>${cell}</td>`;
+  const sign = v>=0?'+':'';
+  const t = Math.abs(v)/scale;
+  const strong = t >= 0.6;
+  let color, weight;
+  if (v > 0) { color = strong ? '#7ee894' : '#5dd17a'; }
+  else if (v < 0) { color = strong ? '#ff8377' : '#ef6f63'; }
+  else { color = '#5a5a5a'; }
+  weight = strong ? 600 : 500;
+  return `<td style="text-align:right;padding:0 12px"><span style="color:${color};font-weight:${weight};font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;letter-spacing:.01em">${sign}${v.toFixed(2)}%</span></td>`;
 }
 function thPct(v){
   if(v==null||!Number.isFinite(v)) return '<span class="muted">-</span>';
@@ -12024,6 +13886,7 @@ function thPct(v){
 function renderThPage(p){goPage(thSt,p,renderTh);}
 function renderTh(){
   const s=thSt;
+  document.querySelectorAll('#tab-themes thead th').forEach(t=>{t.classList.remove('sort-asc','sort-desc');if(t.dataset.col===s.sc)t.classList.add(s.sd===1?'sort-asc':'sort-desc');});
   const arr=[...s.filtered];
   arr.sort((a,b)=>{
     let av=a[s.sc],bv=b[s.sc];
@@ -12107,7 +13970,64 @@ function renderTh(){
     if(tip)tip.style.display='none';
   });
   canvas.addEventListener('dblclick',function(){if(blChart){blChart.resetZoom();requestAnimationFrame(syncGIToBuyRange);}});
-  document.getElementById('bubbleChart').addEventListener('dblclick',function(){if(bChart)bChart.resetZoom();});
+  document.getElementById('bubbleChart')?.addEventListener('dblclick',function(){if(bChart)bChart.resetZoom();});
+})();
+
+// -- Measure tool: click-drag to measure price/time range --
+(function(){
+  const canvas=document.getElementById('buyLevelChart');
+  if(!canvas) return;
+  function getMeasurePoint(e){
+    if(!blChart||!_blOhlcv.length) return null;
+    const rect=canvas.getBoundingClientRect();
+    const {left,right,top,bottom}=blChart.chartArea;
+    const sx=blChart.scales?.x,sy=blChart.scales?.y;
+    if(!sx||!sy) return null;
+    const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+    if(mx<left||mx>right||my<top||my>bottom) return null;
+    const xLo=Math.max(0,Math.floor(Number.isFinite(sx.min)?sx.min:0));
+    const xHi=Math.min(_blOhlcv.length-1,Math.ceil(Number.isFinite(sx.max)?sx.max:_blOhlcv.length-1));
+    let bestIdx=null,bestDist=Infinity;
+    for(let i=xLo;i<=xHi;i++){
+      const d=Math.abs(sx.getPixelForValue(i)-mx);
+      if(d<bestDist){bestDist=d;bestIdx=i;}
+    }
+    if(bestIdx==null) return null;
+    return {idx:bestIdx,price:sy.getValueForPixel(my)};
+  }
+  canvas.addEventListener('mousedown',function(e){
+    if(!_blMeasureMode) return;
+    e.preventDefault();
+    if(_blMeasurePhase===0){
+      // Click 1: anchor start, begin free-drag
+      const pt=getMeasurePoint(e);
+      if(!pt) return;
+      _blMeasureStart=pt;_blMeasureCurrent=pt;_blMeasurePhase=1;
+      if(blChart) blChart.draw();
+    } else if(_blMeasurePhase===1){
+      // Click 2: lock end point
+      const pt=getMeasurePoint(e);
+      if(pt) _blMeasureCurrent=pt;
+      _blMeasurePhase=2;
+      if(blChart) blChart.draw();
+    } else if(_blMeasurePhase===2){
+      // Click 3: clear and deactivate
+      _blMeasureStart=null;_blMeasureCurrent=null;
+      _blMeasureDeactivate();
+    }
+  });
+  canvas.addEventListener('mousemove',function(e){
+    if(!_blMeasureMode||_blMeasurePhase!==1) return;
+    const pt=getMeasurePoint(e);
+    if(pt){_blMeasureCurrent=pt;if(blChart) blChart.draw();}
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&_blMeasureMode){
+      _blMeasureStart=null;_blMeasureCurrent=null;
+      _blMeasureDeactivate();
+      if(blChart) blChart.draw();
+    }
+  });
 })();
 
 // -- Crosshair: sync vertical line across candle + GI charts --
@@ -12138,9 +14058,47 @@ function renderTh(){
       const mx=e.clientX-rect.left;
       const my=e.clientY-rect.top;
       _crosshairSource=(e.target.id==='buyLevelChart')?'buy':'gi';
-      _crosshairRatio=(mx-left)/(right-left);
-      const xVal=xScale.getValueForPixel(mx);
-      _crosshairXVal=Number.isFinite(xVal)?xVal:null;
+      // Always store ratio relative to blChart's chartArea so blCrosshairXPixel
+      // uses a single reference frame for both panels.  Without this, blChart's
+      // wider y-axis (more label digits → bigger chartArea.left) makes the plot
+      // area narrower than giHistChart's, and the same fractional ratio resolves
+      // to a different canvas X on each chart — causing the drift the user sees.
+      if(blChart&&blChart.chartArea&&blChart.canvas){
+        const blArea=blChart.chartArea;
+        const blCanvLeft=blChart.canvas.getBoundingClientRect().left;
+        const blMx=(rect.left+mx)-blCanvLeft;   // mouse X in blChart canvas space
+        _crosshairRatio=(blMx-blArea.left)/(blArea.right-blArea.left);
+      } else {
+        _crosshairRatio=(mx-left)/(right-left);
+      }
+      // Always snap the captured X-value to the nearest BAR in the MAIN chart's
+      // coordinate system. The two charts have independent x-scales whose
+      // pixel-per-unit ratios may differ slightly — using srcChart.x.getValueForPixel()
+      // can return a logical x that points at a different bar than the cursor is
+      // actually over (especially noticeable near the chart edges and in volcndle mode).
+      // Searching for the closest bar via blChart's own positioning guarantees the
+      // crosshair date/value matches the candle directly under the cursor.
+      let xVal=null;
+      if(blChart&&blChart.scales&&blChart.scales.x&&_blOhlcv.length){
+        const blX=blChart.scales.x;
+        const isVc=String(_blChartType||'').toLowerCase()==='volcndle'&&_blVcConsistentGaps;
+        const vcLayout=isVc?_buildVcLayout(blChart):null;
+        const xLo=Math.max(0,Math.floor(Number.isFinite(blX.min)?blX.min:0));
+        const xHi=Math.min(_blOhlcv.length-1,Math.ceil(Number.isFinite(blX.max)?blX.max:_blOhlcv.length-1));
+        let bestIdx=null,bestDist=Infinity;
+        for(let i=xLo;i<=xHi;i++){
+          const vc=vcLayout?vcLayout.get(i):null;
+          const px=vc?vc.cx:blX.getPixelForValue(i);
+          const d=Math.abs(px-mx);
+          if(d<bestDist){bestDist=d;bestIdx=i;}
+        }
+        if(bestIdx!=null) xVal=bestIdx;
+      }
+      if(xVal==null){
+        const v=xScale.getValueForPixel(mx);
+        xVal=Number.isFinite(v)?v:null;
+      }
+      _crosshairXVal=xVal;
       _crosshairY=(my>=top&&my<=bottom)?my:null;
       if(blChart)blChart.draw();
       if(giHistChart)giHistChart.draw();
@@ -12163,7 +14121,9 @@ function renderTh(){
 })();
 
 // -- TAB: HEATMAP --
-let _hmView='themes',_hmMetric='r1d';
+let _hmView='themes',_hmMetric='r1d',_hmThLayout='flat';
+try{const _sv=localStorage.getItem('gekko_hm_view');if(_sv==='sp500'||_sv==='majors'||_sv==='themes')_hmView=_sv;}catch(_e){}
+(function(){try{const s=_uiStateLoad();if(s.hmMetric)_hmMetric=s.hmMetric;if(s.hmLayout==='grouped'||s.hmLayout==='flat')_hmThLayout=s.hmLayout;}catch(_e){}})();
 let _hmRefreshPollTimer=null;
 async function hmRefreshAll(btn){
   if(btn){btn.disabled=true;btn.textContent='↻ Syncing…';}
@@ -12236,11 +14196,26 @@ function hmLegendText(){
   return '';
 }
 function hmSyncControls(){
-  const wrap=document.getElementById('hmCatWrap');
-  if(wrap) wrap.style.display=_hmView==='themes'?'flex':'none';
+  const isThemes=_hmView==='themes';
+  const layoutWrap=document.getElementById('hmThLayoutWrap');
+  if(layoutWrap) layoutWrap.style.display=isThemes?'flex':'none';
+}
+function hmCatChange(){
+  const v=document.getElementById('hmCat').value;
+  _uiStateSave({hmCat:v});
+  renderHeatmap();
+}
+function hmSetThLayout(layout,btn){
+  _hmThLayout=layout;
+  _uiStateSave({hmLayout:layout});
+  document.querySelectorAll('#tab-heatmap .th-cat-btn[id^="hmTh"]').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  hmSyncControls();
+  renderHeatmap();
 }
 function hmSetView(v,btn){
   _hmView=v;
+  try{localStorage.setItem('gekko_hm_view',_hmView);}catch(_e){}
   document.querySelectorAll('#tab-heatmap .th-cat-btn[id^="hmView"]').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   // rebuild category dropdown
@@ -12266,27 +14241,21 @@ function hmSetView(v,btn){
 }
 function hmSetMetric(m,btn){
   _hmMetric=m;
+  _uiStateSave({hmMetric:m});
   document.querySelectorAll('#tab-heatmap .th-cat-btn[id^="hmM"]').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   renderHeatmap();
 }
 function hmPopulateCats(){
-  const sel=document.getElementById('hmCat');
-  sel.innerHTML='<option value="">All</option>';
-  if(_hmView==='themes'){
-    const cats=[...new Set(THEMES_DATA.map(r=>String((r&&(r.theme||r.cat))||'')).filter(Boolean))]
-      .filter(c=>!c.startsWith('_')).sort();
-    cats.forEach(c=>{const o=document.createElement('option');o.value=o.textContent=c;sel.appendChild(o);});
-  }
-  sel.value='';
   hmSyncControls();
 }
 function hmPctColor(v){
-  if(v==null)return'#1a1a1a';
-  const abs=Math.abs(v);
-  const intensity=Math.min(1,abs/8);
-  if(v>0)return`rgba(${Math.round(22+34*intensity)},${Math.round(163-63*intensity)},${Math.round(74-54*intensity)},${0.55+intensity*0.45})`;
-  return`rgba(${Math.round(155+84*intensity)},${Math.round(28)},${Math.round(28)},${0.55+intensity*0.45})`;
+  // Shared oklch tiered palette — same algorithm as themes, used by Majors and S&P 500
+  if(v==null)return'#0e0e0e';
+  const tier=_hmThTier(v);
+  const c=v>=0?_hmThG[tier]:_hmThR[tier];
+  const mix=30+Math.min(1,Math.abs(v)/4)*55;
+  return`color-mix(in oklch, ${c} ${mix.toFixed(0)}%, #060606)`;
 }
 function hmGiColor(v){
   if(v==null)return'#1a1a1a';
@@ -12296,6 +14265,22 @@ function hmGiColor(v){
   if(v>=45)return'rgba(234,179,8,0.65)';
   if(v>=33)return'rgba(249,115,22,0.65)';
   return'rgba(185,28,28,0.70)';
+}
+// Themes-only oklch tiered palette (bold direction design)
+const _hmThG={1:'oklch(0.74 0.18 145)',2:'oklch(0.66 0.16 145)',3:'oklch(0.55 0.13 145)',4:'oklch(0.42 0.10 145)'};
+const _hmThR={1:'oklch(0.66 0.20 25)', 2:'oklch(0.58 0.18 25)', 3:'oklch(0.48 0.15 25)', 4:'oklch(0.38 0.12 25)'};
+function _hmThTier(v){ const a=Math.abs(v); return a<0.4?4:a<1.2?3:a<2.6?2:1; }
+function hmThemesPctColor(v){
+  if(v==null)return'#0e0e0e';
+  const tier=_hmThTier(v);
+  const c=v>=0?_hmThG[tier]:_hmThR[tier];
+  const mix=30+Math.min(1,Math.abs(v)/4)*55;
+  return`color-mix(in oklch, ${c} ${mix.toFixed(0)}%, #060606)`;
+}
+function hmThemesPctEdge(v){
+  if(v==null)return null;
+  const tier=_hmThTier(v);
+  return{color:v>=0?_hmThG[tier]:_hmThR[tier], strong:tier===1};
 }
 function hmFmt(v,metric){
   if(v==null)return'-';
@@ -12346,10 +14331,13 @@ function hmScheduleLayout(){
 function hmApplyLayout(){
   const tab=document.getElementById('tab-heatmap');
   const grid=document.getElementById('hmGrid');
-  if(!tab||!grid||!grid.children.length||!tab.classList.contains('active')||_hmView==='sp500') return false;
+  if(!tab||!grid||!tab.classList.contains('active')||_hmView==='sp500') return false;
+  const isGrouped=_hmView==='themes'&&_hmThLayout==='grouped';
+  // For grouped mode count the nested cells; for flat mode count direct children
+  const count=isGrouped?grid.querySelectorAll('.hm-cell').length:grid.children.length;
+  if(!count) return false;
   const legend=document.getElementById('hmLegend');
   const controls=tab.querySelector('.hm-controls');
-  const count=grid.children.length;
   // getBoundingClientRect returns real pixel size even immediately after display change
   const gridRect=grid.getBoundingClientRect();
   const tabRect=tab.getBoundingClientRect();
@@ -12359,11 +14347,22 @@ function hmApplyLayout(){
     const usedH=(controls?controls.getBoundingClientRect().height:0)+(legend&&legend.style.display!=='none'?legend.getBoundingClientRect().height:0)+8;
     height=Math.max(0, tabRect.height-usedH);
   }
-  // If still no real dimensions, signal caller to retry
-  if(width<60||height<60) return false;
-  height=Math.max(180,height);
-  const gap=count>180?2:(count>84?3:4);
+  if(width<60||(!isGrouped&&height<60)) return false;
+  const gap=count>180?1:(count>84?2:3);
   const pad=count>180?2:4;
+  grid.classList.toggle('hm-grouped', isGrouped);
+  if(isGrouped){
+    // Size cells from width only — grouped content scrolls vertically
+    const targetCols=Math.max(3, Math.min(10, Math.floor((width-pad*2+gap)/(88+gap))));
+    const cell=Math.max(24, Math.min(96, Math.floor((width-pad*2-gap*(targetCols-1))/targetCols)));
+    grid.style.setProperty('--hm-cell', `${cell}px`);
+    grid.style.setProperty('--hm-gap', `${gap}px`);
+    grid.style.setProperty('--hm-pad', `${pad}px`);
+    grid.classList.toggle('hm-tight', cell<44);
+    grid.style.opacity='';
+    return true;
+  }
+  height=Math.max(180,height);
   let best={ cols:1, size:24 };
   for(let cols=1; cols<=count; cols++) {
     const rows=Math.ceil(count/cols);
@@ -12383,7 +14382,7 @@ function hmApplyLayout(){
   return true;
 }
 function hmViewRows(){
-  const catFilter=document.getElementById('hmCat').value;
+  const catFilter='';
   if(_hmView==='themes') return THEMES_DATA.filter(r=>{
     const group=String((r&&(r.theme||r.cat))||'');
     if(group.startsWith('_')) return false; // hidden categories (e.g. _majors_only)
@@ -12537,12 +14536,51 @@ function renderHeatmap(){
     hmRenderSP500(rows, grid);
     return;
   }
+  const _isThemes=_hmView==='themes';
+  // Helper: render a single themes cell (used by both flat and grouped paths)
+  function _hmThemesCell(r){
+    const val=r[_hmMetric==='gi'?'gi':_hmMetric];
+    const bg=_hmMetric==='gi'?hmGiColor(val):hmThemesPctColor(val);
+    const fmtVal=hmFmt(val,_hmMetric);
+    let gs='';
+    let strong=false;
+    if(_hmMetric!=='gi'){const e=hmThemesPctEdge(val);if(e&&e.strong){strong=true;gs=`box-shadow:inset 0 0 0 1px color-mix(in oklch, ${e.color} 70%, transparent), 0 6px 24px color-mix(in oklch, ${e.color} 22%, transparent);`;}}
+    return`<div class="hm-cell hm-themes${strong?' hm-strong':''}" data-ticker="${hmEsc(r.ticker)}" onclick="goChart(this.dataset.ticker)" style="background:${bg};${gs}">
+      <div class="hm-ticker">${r.ticker}</div>
+      <div class="hm-name">${r.name||''}</div>
+      <div class="hm-val">${fmtVal}</div>
+    </div>`;
+  }
+  // Themes grouped view — sections per category, each with its own sub-grid
+  if(_isThemes&&_hmThLayout==='grouped'){
+    const groupMap=new Map();
+    rows.forEach(r=>{
+      const cat=String((r.theme||r.cat)||'Other');
+      if(!groupMap.has(cat)) groupMap.set(cat,[]);
+      groupMap.get(cat).push(r);
+    });
+    const sortedGroups=[...groupMap.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    grid.style.opacity='0';
+    grid.innerHTML=sortedGroups.map(([cat,items])=>{
+      const sorted=[...items].sort((a,b)=>_hmMetric==='gi'?(b.gi||0)-(a.gi||0):(b[_hmMetric]||0)-(a[_hmMetric]||0));
+      return`<div class="hm-th-section">
+        <div class="hm-th-section-head">
+          <span class="hm-th-section-label">${hmEsc(cat)}</span>
+          <span class="hm-th-section-count">${sorted.length}</span>
+        </div>
+        <div class="hm-th-sub-grid">${sorted.map(_hmThemesCell).join('')}</div>
+      </div>`;
+    }).join('');
+    hmScheduleLayout();
+    return;
+  }
+  // Flat view (themes and majors)
   if(_hmMetric==='gi') rows=[...rows].sort((a,b)=>(b.gi||0)-(a.gi||0));
   else rows=[...rows].sort((a,b)=>(b[_hmMetric]||0)-(a[_hmMetric]||0));
-  const metricLabel=hmMetricLabel(_hmMetric);
   // Hide grid while layout calculates to prevent flash of wrong-sized cells
   grid.style.opacity='0';
   grid.innerHTML=rows.map(r=>{
+    if(_isThemes) return _hmThemesCell(r);
     const val=r[_hmMetric==='gi'?'gi':_hmMetric];
     const bg=_hmMetric==='gi'?hmGiColor(val):hmPctColor(val);
     const fmtVal=hmFmt(val,_hmMetric);
@@ -13048,6 +15086,19 @@ function initUI(){
     setInterval(blCheckOhlcvVersion, 120000);
     blStartLivePoll();
     syncWatchlistPanelButton();
+    // Restore saved rotation mode button BEFORE switchTab so that
+    // loadRotationFrame() reads the right active button when the iframe loads.
+    (function(){
+      try{
+        const savedRotMode=localStorage.getItem('gekko_rot_mode_v1');
+        const modeToId={crossAsset:'rotModeCross2',themes:'rotModeThemes2',sectors:'rotModeSectors2'};
+        const btnId=modeToId[savedRotMode];
+        if(btnId){
+          document.querySelectorAll('#tab-rotation .rot-mode-btn').forEach(b=>b.classList.remove('active'));
+          document.getElementById(btnId)?.classList.add('active');
+        }
+      }catch(_e){}
+    })();
     switchTab(_getSavedTab(), null);
     setTimeout(()=>{
       relayoutBuyCharts();
@@ -13075,11 +15126,7 @@ async function loadAppData(){
   const total=endpoints.length;
   try{
     const results=await Promise.all(endpoints.map(async([url,label])=>{
-      const ctrl=new AbortController();
-      const tid=setTimeout(()=>ctrl.abort(),30000); // 30s timeout per request
-      let resp;
-      try{ resp=await fetch(url,{signal:ctrl.signal}); }
-      finally{ clearTimeout(tid); }
+      const resp=await fetch(url);
       if(!resp.ok) throw new Error(label+' '+resp.status);
       const sourceUpdatedAt = resp.headers.get('X-Gekko-Source-Updated-At') || '';
       const data=await resp.json();
@@ -13096,9 +15143,7 @@ async function loadAppData(){
     ZR_DATA.forEach(r=>{ if(r&&!r.company) r.company=BL_TICKER_INFO[r.ticker]||''; blRememberTickerCompany(r?.ticker, r?.company); });
   }catch(err){
     console.error('loadAppData failed', err);
-    const isTimeout=err.name==='AbortError';
-    const hint=isTimeout?'Server took too long to respond (>30s)':err.message;
-    if(overlay) overlay.innerHTML='<div style="text-align:center;color:#ef4444;font-family:JetBrains Mono,monospace;padding:40px;line-height:1.8">Failed to load data.<br><small style="color:#777">'+hint+'</small><br><br><small style="color:#555">Make sure gekko_server.py is running:<br>python gekko_server.py</small><br><br><button onclick="location.reload()" style="margin-top:8px;padding:6px 18px;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;cursor:pointer;font-family:inherit">↻ Retry</button></div>';
+    if(overlay) overlay.innerHTML='<div style="text-align:center;color:#ef4444;font-family:JetBrains Mono,monospace;padding:40px;line-height:1.8">Failed to load data.<br><small style="color:#777">'+err.message+'</small><br><br><small style="color:#555">Make sure gekko_server.py is running:<br>python gekko_server.py</small></div>';
     return;
   }
   if(overlay) overlay.style.display='none';
@@ -13414,818 +15459,766 @@ loadAppData();
 })();
 </script>
 
-<!-- Bubble Chart v2 — React component (Babel transpiled) -->
+
+
+
+<!-- Bubble Chart v2 React component (lazy-transpiled by Babel when bubble tab is opened) -->
 <script type="text/babel" data-presets="react">
 (function(){
-// useTweaks — lightweight localStorage-backed settings hook
-window.TWEAK_DEFAULTS = {
-  xAxis:'gi', yAxis:'managers', sizeAxis:'totalValue',
-  showQuadrants:true, showLabels:true, viewMode:'default',
-  minManagers:1, minGi:0, sector:'all',
-  onlyInsiders:false, onlyPinned:false, labelDensity:20,
-};
-window.useTweaks = function(defaults){
-  const [vals, setVals] = React.useState(()=>{
-    try{ const s=JSON.parse(localStorage.getItem('gekko_bc_cfg')||'{}'); return{...defaults,...s}; }
-    catch{ return{...defaults}; }
-  });
-  const setTweak = React.useCallback((k,v)=>{
-    setVals(prev=>{
-      const next={...prev,[k]:v};
-      try{ localStorage.setItem('gekko_bc_cfg',JSON.stringify(next)); }catch{}
-      return next;
-    });
-  },[]);
-  return [vals, setTweak];
-};
-
-// ---------- axis definitions ----------
-const AXES = {
-  managers:{ label:'Managers Holding', short:'Mgrs', get:r=>r.manager_count, fmt:v=>String(v), min:0 },
-  gi:{ label:'GI Score', short:'GI', get:r=>r.gi_score, fmt:v=>(v==null?'—':v.toFixed(1)), min:0, max:100 },
-  chg30:{ label:'30d Change', short:'30d Δ', get:r=>r.chg_30d, fmt:v=>window.fmtPct(v) },
-  chg90:{ label:'90d Change', short:'90d Δ', get:r=>r.chg_90d, fmt:v=>window.fmtPct(v) },
-  newCount:{ label:'New Positions', short:'New', get:r=>r.new_count, fmt:v=>String(v), min:0 },
-  insiderDist:{ label:'Insider Buys (distinct)', short:'Insiders', get:r=>r.insider_buys_distinct, fmt:v=>String(v), min:0 },
-  totalValue:{ label:'Held Value', short:'Held $', get:r=>r.total_value, fmt:v=>window.fmtMoney(v), min:0, log:true },
-  newValue:{ label:'New-Position $', short:'New $', get:r=>r.new_value, fmt:v=>window.fmtMoney(v), min:0, log:true },
-  insiderValue:{ label:'Insider Buy $', short:'Insider $', get:r=>r.insider_buys_value, fmt:v=>window.fmtMoney(v), min:0 },
-};
-
-const ARCHETYPE = {
-  mega:         { icon:'◆', text:'Mega-cap institutional favorite' },
-  hidden_gem:   { icon:'✦', text:'Hidden gem — few holders, strong accumulation' },
-  crowded_trap: { icon:'⚠', text:'Crowded trap — heavily held, distributing' },
-  falling_knife:{ icon:'▼', text:'Falling knife — low GI, thin ownership' },
-  neutral:      { icon:'·', text:'Neutral — mixed signals' },
-};
-
-const TIER_COLOR = {
-  'dark-green':'#22c55e','green':'#86efac','yellow':'#facc15','orange':'#f97316','red':'#ef4444'
-};
-
-function niceStep(span){
-  const p=Math.pow(10,Math.floor(Math.log10(Math.abs(span)||1)));
-  const n=span/p;
-  if(n<=1)return 0.2*p; if(n<=2)return 0.5*p; if(n<=5)return 1*p; return 2*p;
-}
-
-function axisRange(vals,axis){
-  if(!vals.length)return[0,1];
-  let min=Math.min(...vals), max=Math.max(...vals);
-  if(axis.min!=null)min=axis.min;
-  if(axis.max!=null)max=axis.max;
-  const pad=(max-min)*0.06||1;
-  return[Math.max(axis.min??-Infinity,min-pad),Math.min(axis.max??Infinity,max+pad)];
-}
-
-function placeLabels(points,ctx){
-  const placed=[];
-  ctx.font='500 10px "JetBrains Mono"';
-  for(const p of points){
-    if(!p._wantLabel)continue;
-    const w=ctx.measureText(p.ticker).width+8, h=14;
-    const cands=[
-      {x:p.sx+p.r+4, y:p.sy-h/2},
-      {x:p.sx-w/2,   y:p.sy-p.r-h-2},
-      {x:p.sx-p.r-w-4, y:p.sy-h/2},
-      {x:p.sx-w/2,   y:p.sy+p.r+2},
-    ];
-    let chosen=null;
-    for(const c of cands){
-      const box={x:c.x,y:c.y,w,h};
-      const collides=placed.some(b=>!(box.x+box.w<b.x||box.x>b.x+b.w||box.y+box.h<b.y||box.y>b.y+b.h));
-      if(!collides){chosen=box;break;}
-    }
-    if(chosen){placed.push(chosen);p._labelBox=chosen;}
-  }
-  return placed;
-}
-
-// ---------- main component ----------
-function BubbleChartApp({ rows=[] }){
   const { useEffect, useRef, useState, useCallback, useMemo } = React;
 
-  const canvasRef = useRef(null);
-  const dataRef = useRef(rows);
-  const [rowsVersion, setRowsVersion] = useState(0);
+  // 7 axes (chg30/chg90 dropped — data unavailable on CONV rows)
+  const AXES = {
+    managers:    { label:'Managers Holding',         short:'Mgrs',     get:r=>r.manager_count,        fmt:v=>String(v),                min:0 },
+    gi:          { label:'GI Score',                 short:'GI',       get:r=>r.gi_score,             fmt:v=>v==null?'—':v.toFixed(1), min:0, max:100 },
+    newCount:    { label:'New Positions',            short:'New',      get:r=>r.new_count,            fmt:v=>String(v),                min:0 },
+    insiderDist: { label:'Insider Buys (distinct)',  short:'Insiders', get:r=>r.insider_buys_distinct,fmt:v=>String(v),                min:0 },
+    totalValue:  { label:'Held Value',               short:'Held $',   get:r=>r.total_value,          fmt:v=>window.fmtMoney(v),       min:0, log:true },
+    newValue:    { label:'New-Position $',           short:'New $',    get:r=>r.new_value,            fmt:v=>window.fmtMoney(v),       min:0, log:true },
+    insiderValue:{ label:'Insider Buy $',            short:'Insider $',get:r=>r.insider_buys_value,   fmt:v=>window.fmtMoney(v),       min:0 },
+  };
+  const TIER_COLOR = { 'dark-green':'#22c55e','green':'#86efac','yellow':'#facc15','orange':'#f97316','red':'#ef4444' };
 
-  useEffect(()=>{
-    dataRef.current=rows;
-    setRowsVersion(v=>v+1);
-  },[rows]);
-
-  const [tv, setTweak] = window.useTweaks(window.TWEAK_DEFAULTS);
-  const t = { values:tv, set:(obj)=>{ for(const k in obj) setTweak(k,obj[k]); } };
-
-  const [hotTiers, setHotTiers] = useState(new Set(['dark-green','green','yellow','orange','red']));
-  const [hoverPt, setHoverPt] = useState(null);
-  const [hoverPos, setHoverPos] = useState({x:0,y:0});
-  const [selected, setSelected] = useState(new Set());
-  const [pinned, setPinned] = useState(()=>{
-    try{ return new Set(JSON.parse(localStorage.getItem('gekko_pinned')||'[]')); }
-    catch{ return new Set(); }
-  });
-  const [search, setSearch] = useState('');
-  const [view, setView] = useState({xMin:null,xMax:null,yMin:null,yMax:null});
-  const [pulseTicker, setPulseTicker] = useState(null);
-  const [axisMenu, setAxisMenu] = useState(null);
-  const [lasso, setLasso] = useState(null);
-  const [panning, setPanning] = useState(false);
-  const [openChip, setOpenChip] = useState(null);
-  const [popPos, setPopPos] = useState({x:0,y:0});
-  const chipRefs = useRef({});
-
-  useEffect(()=>{
-    try{ localStorage.setItem('gekko_pinned',JSON.stringify([...pinned])); }catch{}
-  },[pinned]);
-
-  const filtered = useMemo(()=>{
-    return dataRef.current.filter(r=>{
-      if(!hotTiers.has(r.gi_tier))return false;
-      if(r.manager_count<tv.minManagers)return false;
-      if(r.gi_score<tv.minGi)return false;
-      if(tv.sector!=='all'&&r.sector!==tv.sector)return false;
-      if(tv.onlyInsiders&&r.insider_buys_distinct<1)return false;
-      if(tv.onlyPinned&&!pinned.has(r.ticker))return false;
-      return true;
+  const TWEAK_DEFAULTS = {
+    xAxis:'managers', yAxis:'gi', sizeAxis:'totalValue',
+    showLabels:true, viewMode:'default',
+    minManagers:1, minGi:0, minInsiders:0, insiderWindow:0, sector:'all',
+    onlyInsiders:false, labelDensity:20
+  };
+  // Insider buy time-window options (days). 0 = any time.
+  const INSIDER_WINDOWS = [
+    { v: 0,   label: 'Any time' },
+    { v: 7,   label: '1 week' },
+    { v: 14,  label: '2 weeks' },
+    { v: 21,  label: '3 weeks' },
+    { v: 30,  label: '1 month' },
+    { v: 60,  label: '2 months' },
+    { v: 90,  label: '3 months' },
+    { v: 180, label: '6 months' },
+    { v: 365, label: '1 year' },
+  ];
+  const INSIDER_WINDOW_LABEL = v => (INSIDER_WINDOWS.find(o=>o.v===v) || INSIDER_WINDOWS[0]).label;
+  function useTweaks(){
+    const [v, setV] = useState(()=>{
+      try {
+        const merged = Object.assign({}, TWEAK_DEFAULTS, JSON.parse(localStorage.getItem('gekko_bc_cfg')||'{}'));
+        // Migrate removed view modes back to 'default'
+        if (merged.viewMode !== 'default' && merged.viewMode !== 'sector') merged.viewMode = 'default';
+        return merged;
+      } catch { return Object.assign({}, TWEAK_DEFAULTS); }
     });
-  },[hotTiers,tv.minManagers,tv.minGi,tv.sector,tv.onlyInsiders,tv.onlyPinned,pinned,rowsVersion]);
-
-  const xA=AXES[tv.xAxis], yA=AXES[tv.yAxis], sA=AXES[tv.sizeAxis];
-  const drawRef=useRef(()=>{});
-
-  const draw=useCallback(()=>{
-    const canvas=canvasRef.current;
-    if(!canvas)return;
-    const dpr=window.devicePixelRatio||1;
-    const rect=canvas.parentElement.getBoundingClientRect();
-    canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
-    canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
-    const ctx=canvas.getContext('2d');
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,rect.width,rect.height);
-
-    const W=rect.width, H=rect.height;
-    const pad={l:56,r:16,t:16,b:36};
-    const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
-
-    const xVals=filtered.map(r=>xA.get(r)).filter(v=>v!=null&&isFinite(v));
-    const yVals=filtered.map(r=>yA.get(r)).filter(v=>v!=null&&isFinite(v));
-    const sVals=filtered.map(r=>sA.get(r)).filter(v=>v!=null&&isFinite(v)&&v>=0);
-
-    const emptyEl=document.getElementById('emptyState');
-    if(!xVals.length||!yVals.length){
-      if(emptyEl)emptyEl.style.display='flex';
-      return;
-    }
-    if(emptyEl)emptyEl.style.display='none';
-
-    let [xMin,xMax]=view.xMin!=null?[view.xMin,view.xMax]:axisRange(xVals,xA);
-    let [yMin,yMax]=view.yMin!=null?[view.yMin,view.yMax]:axisRange(yVals,yA);
-
-    const xScale=v=>pad.l+((v-xMin)/(xMax-xMin))*pw;
-    const yScale=v=>pad.t+(1-(v-yMin)/(yMax-yMin))*ph;
-
-    const sMin=Math.min(...sVals,0), sMax=Math.max(...sVals,1);
-    const minR=4, maxR=26;
-    const rScale=v=>{
-      if(sMax<=0)return minR;
-      const vv=Math.max(0,v||0);
-      if(sA.log){
-        const L=Math.log1p(vv),Lmin=Math.log1p(Math.max(0,sMin)),Lmax=Math.log1p(sMax);
-        if(Lmax===Lmin)return(minR+maxR)/2;
-        return minR+((L-Lmin)/(Lmax-Lmin))*(maxR-minR);
-      }
-      const n=(Math.sqrt(vv)-Math.sqrt(Math.max(0,sMin)))/(Math.sqrt(sMax)-Math.sqrt(Math.max(0,sMin))||1);
-      return Math.max(minR,Math.min(maxR,minR+n*(maxR-minR)));
-    };
-
-    // quadrant dividers
-    if(tv.showQuadrants&&tv.viewMode==='default'){
-      const xMid=(xMin+xMax)/2;
-      const yMid=yA===AXES.gi?50:(yMin+yMax)/2;
-      ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1; ctx.setLineDash([3,4]);
-      ctx.beginPath();
-      ctx.moveTo(xScale(xMid),pad.t); ctx.lineTo(xScale(xMid),H-pad.b);
-      ctx.moveTo(pad.l,yScale(yMid)); ctx.lineTo(W-pad.r,yScale(yMid));
-      ctx.stroke(); ctx.setLineDash([]);
-      updateQuadrantLabels(xA,yA);
-    } else {
-      ['q-tl','q-tr','q-bl','q-br'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('on');});
-    }
-
-    // grid
-    ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1;
-    ctx.font='10px "JetBrains Mono"'; ctx.fillStyle='#555';
-    const xStep=niceStep((xMax-xMin)/6);
-    for(let v=Math.ceil(xMin/xStep)*xStep;v<=xMax;v+=xStep){
-      const x=xScale(v);
-      ctx.beginPath(); ctx.moveTo(x,pad.t); ctx.lineTo(x,H-pad.b); ctx.stroke();
-      ctx.textAlign='center'; ctx.textBaseline='top';
-      ctx.fillText(xA.fmt(v).replace('$',''),x,H-pad.b+6);
-    }
-    const yStep=niceStep((yMax-yMin)/6);
-    for(let v=Math.ceil(yMin/yStep)*yStep;v<=yMax;v+=yStep){
-      const y=yScale(v);
-      ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
-      ctx.textAlign='right'; ctx.textBaseline='middle';
-      ctx.fillText(yA.fmt(v),pad.l-8,y);
-    }
-
-    // density heatmap
-    if(tv.viewMode==='density'){
-      const cells=24, cw=pw/cells, chh=ph/cells;
-      const grid=Array.from({length:cells},()=>new Array(cells).fill(0));
-      filtered.forEach(r=>{
-        const x=xA.get(r),y=yA.get(r);
-        if(x==null||y==null)return;
-        const cx=Math.min(cells-1,Math.max(0,Math.floor((x-xMin)/(xMax-xMin)*cells)));
-        const cy=Math.min(cells-1,Math.max(0,Math.floor((y-yMin)/(yMax-yMin)*cells)));
-        grid[cy][cx]+=1+(r.gi_score/50);
+    const set = useCallback((k, val)=>{
+      setV(prev=>{
+        const n = Object.assign({}, prev, {[k]:val});
+        try { localStorage.setItem('gekko_bc_cfg', JSON.stringify(n)); } catch {}
+        return n;
       });
-      const maxCell=Math.max(...grid.flat(),1);
-      for(let cy=0;cy<cells;cy++)for(let cx=0;cx<cells;cx++){
-        const v=grid[cy][cx]/maxCell;
-        if(v<.02)continue;
-        ctx.fillStyle=`rgba(34,197,94,${v*0.35})`;
-        ctx.fillRect(pad.l+cx*cw, pad.t+(cells-1-cy)*chh, cw, chh);
-      }
-    }
-
-    // bubbles
-    const pts=filtered.map(r=>{
-      const xv=xA.get(r),yv=yA.get(r),sv=sA.get(r);
-      if(xv==null||yv==null)return null;
-      return{r:rScale(sv||0),sx:xScale(xv),sy:yScale(yv),ticker:r.ticker,company:r.company,sector:r.sector,giScore:r.gi_score,giTier:r.gi_tier,row:r,pinned:pinned.has(r.ticker),selected:selected.has(r.ticker)};
-    }).filter(Boolean);
-    pts.sort((a,b)=>b.r-a.r);
-
-    const colorFor=p=>{
-      if(tv.viewMode==='sector')return(window.SECTOR_COLORS[p.sector]||'#999');
-      return TIER_COLOR[p.giTier]||'#999';
-    };
-
-    for(const p of pts){
-      const col=colorFor(p);
-      const isSearched=pulseTicker&&p.ticker.toLowerCase().includes(pulseTicker.toLowerCase());
-      const dimmed=pulseTicker&&!isSearched;
-      const alpha=dimmed?0.12:(p.selected?1:0.75);
-      ctx.globalAlpha=alpha*0.55; ctx.fillStyle=col;
-      ctx.beginPath(); ctx.arc(p.sx,p.sy,p.r,0,Math.PI*2); ctx.fill();
-      ctx.globalAlpha=alpha; ctx.strokeStyle=col;
-      ctx.lineWidth=p.row.insider_buys_distinct>0?2.5:1.2;
-      ctx.stroke();
-      if(p.row.insider_buys_distinct>0){
-        ctx.strokeStyle=`rgba(251,191,36,${alpha*0.7})`; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.arc(p.sx,p.sy,p.r+3,0,Math.PI*2); ctx.stroke();
-      }
-      if(p.pinned){
-        ctx.fillStyle=`rgba(251,191,36,${alpha})`;
-        ctx.beginPath(); ctx.arc(p.sx+p.r*0.7,p.sy-p.r*0.7,3,0,Math.PI*2); ctx.fill();
-      }
-      if(p.selected){
-        ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.globalAlpha=1;
-        ctx.beginPath(); ctx.arc(p.sx,p.sy,p.r+4,0,Math.PI*2); ctx.stroke();
-      }
-      ctx.globalAlpha=1;
-    }
-
-    if(pulseTicker){
-      for(const p of pts){
-        if(!p.ticker.toLowerCase().includes(pulseTicker.toLowerCase()))continue;
-        const pulse=(Date.now()/600)%1;
-        ctx.strokeStyle=`rgba(255,255,255,${1-pulse})`; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.arc(p.sx,p.sy,p.r+4+pulse*18,0,Math.PI*2); ctx.stroke();
-      }
-    }
-
-    if(tv.showLabels){
-      const sorted=[...pts].sort((a,b)=>{
-        const sa=(a.pinned?1e9:0)+(a.selected?5e8:0)+a.r;
-        const sb=(b.pinned?1e9:0)+(b.selected?5e8:0)+b.r;
-        return sb-sa;
-      });
-      const budget=Math.max(4,Math.min(sorted.length,Math.round(tv.labelDensity)));
-      sorted.slice(0,budget).forEach(p=>p._wantLabel=true);
-      placeLabels(sorted,ctx);
-      ctx.font='600 10px "JetBrains Mono"';
-      sorted.forEach(p=>{
-        if(!p._labelBox)return;
-        const b=p._labelBox;
-        ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(b.x,b.y,b.w,b.h);
-        ctx.fillStyle=p.selected?'#fff':'rgba(234,234,234,.92)';
-        ctx.textAlign='left'; ctx.textBaseline='middle';
-        ctx.fillText(p.ticker,b.x+4,b.y+b.h/2);
-      });
-    }
-
-    if(lasso){
-      const x=Math.min(lasso.x0,lasso.x1), y=Math.min(lasso.y0,lasso.y1);
-      const w=Math.abs(lasso.x1-lasso.x0), h=Math.abs(lasso.y1-lasso.y0);
-      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.fillStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
-      ctx.setLineDash([4,3]); ctx.fillRect(x,y,w,h); ctx.strokeRect(x,y,w,h); ctx.setLineDash([]);
-    }
-
-    canvas._pts=pts;
-    canvas._scale={xScale,yScale,xMin,xMax,yMin,yMax,pad,W,H};
-    const rcShown=document.getElementById('rcShown');
-    const rcTotal=document.getElementById('rcTotal');
-    if(rcShown)rcShown.textContent=filtered.length;
-    if(rcTotal)rcTotal.textContent=dataRef.current.length;
-  },[filtered,xA,yA,sA,tv.showQuadrants,tv.showLabels,tv.viewMode,tv.labelDensity,pinned,selected,pulseTicker,view,lasso]);
-
-  drawRef.current=draw;
-
-  function updateQuadrantLabels(xA,yA){
-    const mapping={
-      'managers-gi':{tl:'✦ Hidden Gems',tr:'★ Crowded Winners',bl:'▾ Forgotten',br:'⚠ Crowded Traps'},
-      'managers-chg30':{tl:'✦ Contrarian Winners',tr:'★ Momentum Favorites',bl:'▾ Orphans',br:'⚠ Crowded & Fading'},
-      'gi-managers':{tl:'▾ Thin Coverage',tr:'★ Crowded Winners',bl:'⚠ Forgotten',br:'✦ Hidden Gems'},
-    };
-    const xKey=Object.keys(AXES).find(k=>AXES[k]===xA)||'';
-    const yKey=Object.keys(AXES).find(k=>AXES[k]===yA)||'';
-    const key=`${xKey}-${yKey}`;
-    const q=mapping[key];
-    ['tl','tr','bl','br'].forEach((pos,i)=>{
-      const el=document.getElementById(`q-${pos}`);
-      if(!el)return;
-      if(q&&q[pos]){
-        el.textContent=q[pos]; el.classList.add('on');
-        el.style.color=pos==='tr'?'#86efac':pos==='tl'?'#a5e077':pos==='br'?'#fca5a5':'#9ca3af';
-      } else {
-        el.classList.remove('on');
-      }
-    });
+    },[]);
+    return [v, set];
   }
 
-  useEffect(()=>{draw();},[draw]);
-
-  useEffect(()=>{
-    const ro=new ResizeObserver(()=>draw());
-    if(canvasRef.current)ro.observe(canvasRef.current.parentElement);
-    return()=>ro.disconnect();
-  },[draw]);
-
-  useEffect(()=>{
-    if(!pulseTicker)return;
-    let raf;
-    const tick=()=>{draw();raf=requestAnimationFrame(tick);};
-    tick();
-    return()=>cancelAnimationFrame(raf);
-  },[pulseTicker,draw]);
-
-  // hit test
-  const hitTest=(mx,my)=>{
-    const canvas=canvasRef.current;
-    if(!canvas||!canvas._pts)return null;
-    const rect=canvas.getBoundingClientRect();
-    const x=mx-rect.left, y=my-rect.top;
-    for(let i=canvas._pts.length-1;i>=0;i--){
-      const p=canvas._pts[i];
-      const dx=x-p.sx, dy=y-p.sy;
-      if(dx*dx+dy*dy<=(p.r+2)*(p.r+2))return p;
-    }
-    return null;
-  };
-
-  const onMouseMove=e=>{
-    if(panning){return;}
-    if(lasso){
-      const rect=canvasRef.current.getBoundingClientRect();
-      setLasso(l=>({...l,x1:e.clientX-rect.left,y1:e.clientY-rect.top}));
-      return;
-    }
-    const p=hitTest(e.clientX,e.clientY);
-    if(p){setHoverPt(p);setHoverPos({x:e.clientX,y:e.clientY});}
-    else setHoverPt(null);
-  };
-  const onMouseLeave=()=>setHoverPt(null);
-  const onMouseDown=e=>{
-    if(e.button!==0)return;
-    const rect=canvasRef.current.getBoundingClientRect();
-    const x=e.clientX-rect.left, y=e.clientY-rect.top;
-    if(e.shiftKey){
-      setPanning({startX:e.clientX,startY:e.clientY,view:{...view}});
-    } else {
-      const p=hitTest(e.clientX,e.clientY);
-      if(p){
-        setSelected(prev=>{
-          const n=e.ctrlKey||e.metaKey?new Set(prev):new Set();
-          if(n.has(p.ticker))n.delete(p.ticker);else n.add(p.ticker);
-          return n;
-        });
-      } else {
-        setLasso({x0:x,y0:y,x1:x,y1:y});
-        if(!e.ctrlKey&&!e.metaKey)setSelected(new Set());
+  function niceStep(span){
+    const p = Math.pow(10, Math.floor(Math.log10(Math.abs(span)||1)));
+    const n = span / p;
+    if (n<=1) return 0.2*p; if (n<=2) return 0.5*p; if (n<=5) return 1*p; return 2*p;
+  }
+  function axisRange(vals, axis){
+    if (!vals.length) return [0,1];
+    let mn = Math.min(...vals), mx = Math.max(...vals);
+    if (axis.min!=null) mn = axis.min;
+    if (axis.max!=null) mx = axis.max;
+    const pad = (mx-mn)*0.06 || 1;
+    return [Math.max(axis.min ?? -Infinity, mn-pad), Math.min(axis.max ?? Infinity, mx+pad)];
+  }
+  function placeLabels(points, ctx){
+    const placed = [];
+    ctx.font = '500 10px "JetBrains Mono"';
+    for (const p of points){
+      if (!p._wantLabel) continue;
+      const w = ctx.measureText(p.ticker).width + 8, h = 14;
+      const cands = [
+        { x: p.sx + p.r + 4,       y: p.sy - h/2 },
+        { x: p.sx - w/2,           y: p.sy - p.r - h - 2 },
+        { x: p.sx - p.r - w - 4,   y: p.sy - h/2 },
+        { x: p.sx - w/2,           y: p.sy + p.r + 2 },
+      ];
+      let chosen = null;
+      for (const c of cands){
+        const box = { x:c.x, y:c.y, w, h };
+        const collides = placed.some(b => !(box.x+box.w<b.x || box.x>b.x+b.w || box.y+box.h<b.y || box.y>b.y+b.h));
+        if (!collides) { chosen = box; break; }
       }
-    }
-  };
-  const onMouseUp=e=>{
-    if(panning){setPanning(false);return;}
-    if(lasso){
-      const x0=Math.min(lasso.x0,lasso.x1), x1=Math.max(lasso.x0,lasso.x1);
-      const y0=Math.min(lasso.y0,lasso.y1), y1=Math.max(lasso.y0,lasso.y1);
-      if(Math.abs(x1-x0)>4&&Math.abs(y1-y0)>4){
-        const pts=(canvasRef.current._pts||[]).filter(p=>p.sx>=x0&&p.sx<=x1&&p.sy>=y0&&p.sy<=y1);
-        setSelected(new Set(pts.map(p=>p.ticker)));
+      if (!chosen){
+        // No clean spot — pick the candidate with the fewest collisions as a fallback
+        chosen = cands.map(c=>({ x:c.x, y:c.y, w, h })).sort((a,b)=>{
+          const ca=placed.filter(b=>!(a.x+a.w<b.x||a.x>b.x+b.w||a.y+a.h<b.y||a.y>b.y+b.h)).length;
+          const cb=placed.filter(b=>!(b.x+b.w<b.x||b.x>b.x+b.w||b.y+b.h<b.y||b.y>b.y+b.h)).length;
+          return ca-cb;
+        })[0];
       }
-      setLasso(null);
+      if (chosen){ placed.push(chosen); p._labelBox = chosen; }
     }
-  };
-  const onDoubleClick=()=>{setView({xMin:null,xMax:null,yMin:null,yMax:null});setSelected(new Set());};
-  const onWheel=e=>{
-    e.preventDefault();
-    const canvas=canvasRef.current, sc=canvas?._scale;
-    if(!sc)return;
-    const rect=canvas.getBoundingClientRect();
-    const mx=e.clientX-rect.left, my=e.clientY-rect.top;
-    const{xMin,xMax,yMin,yMax,pad,W,H}=sc;
-    const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
-    const xAtMouse=xMin+((mx-pad.l)/pw)*(xMax-xMin);
-    const yAtMouse=yMin+(1-(my-pad.t)/ph)*(yMax-yMin);
-    const factor=e.deltaY<0?0.85:1/0.85;
-    setView({
-      xMin:xAtMouse+(xMin-xAtMouse)*factor,
-      xMax:xAtMouse+(xMax-xAtMouse)*factor,
-      yMin:yAtMouse+(yMin-yAtMouse)*factor,
-      yMax:yAtMouse+(yMax-yAtMouse)*factor,
+  }
+
+  function BubbleChartApp({ rows = [] }){
+    const canvasRef = useRef(null);
+    const dataRef = useRef(rows);
+    useEffect(()=>{ dataRef.current = rows; setDataVer(v=>v+1); }, [rows]);
+    const [dataVer, setDataVer] = useState(0);
+
+    const [tv, setTweak] = useTweaks();
+    const [hotTiers, setHotTiers] = useState(new Set(['dark-green','green','yellow','orange','red']));
+    const [hoverPt, setHoverPt] = useState(null);
+    const [selected, setSelected] = useState(new Set());
+    const [pinned, setPinned] = useState(()=>{
+      try { return new Set(JSON.parse(localStorage.getItem('gekko_pinned')||'[]')); } catch { return new Set(); }
     });
-  };
+    const [pulseTicker, setPulseTicker] = useState(null);
+    const [view, setView] = useState({ xMin:null, xMax:null, yMin:null, yMax:null });
+    const [panning, setPanning] = useState(false);
 
-  // pan
-  useEffect(()=>{
-    if(!panning)return;
-    const onMove=e=>{
-      const sc=canvasRef.current?._scale;if(!sc)return;
-      const{pad,W,H}=sc;
-      const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
-      const dx=(e.clientX-panning.startX)/pw, dy=(e.clientY-panning.startY)/ph;
-      const v=panning.view;
-      const xr=(v.xMax??1)-(v.xMin??0), yr=(v.yMax??1)-(v.yMin??0);
-      setView({xMin:(v.xMin??0)-dx*xr,xMax:(v.xMax??1)-dx*xr,yMin:(v.yMin??0)+dy*yr,yMax:(v.yMax??1)+dy*yr});
-    };
-    const onUp=()=>setPanning(false);
-    window.addEventListener('mousemove',onMove);
-    window.addEventListener('mouseup',onUp);
-    return()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
-  },[panning]);
+    useEffect(()=>{ try{ localStorage.setItem('gekko_pinned', JSON.stringify([...pinned])); } catch {} }, [pinned]);
 
-  // escape key
-  useEffect(()=>{
-    const h=e=>{if(e.key==='Escape'){setOpenChip(null);setSelected(new Set());}};
-    document.addEventListener('keydown',h);
-    return()=>document.removeEventListener('keydown',h);
-  },[]);
-
-  // axis labels
-  useEffect(()=>{
-    ['xAxisLabel','yAxisLabel','sizeLabel'].forEach((id,i)=>{
-      const el=document.getElementById(id);
-      if(!el)return;
-      const axis=[xA,yA,sA][i];
-      el.textContent=axis.label;
-      el.onclick=e=>{
-        const r=el.getBoundingClientRect();
-        setAxisMenu({kind:['x','y','s'][i],x:r.left,y:r.bottom+4});
+    const filtered = useMemo(()=>{
+      // Apply insider time-window cutoff if set, recomputing windowed counts per row
+      const cutoffMs = tv.insiderWindow > 0 ? (Date.now() - tv.insiderWindow * 86400000) : 0;
+      const xform = r => {
+        if (!cutoffMs) return r;
+        const d = (typeof countDistinctInsiderBuys === 'function') ? countDistinctInsiderBuys(r.ticker, cutoffMs) : r.insider_buys_distinct;
+        const v = (typeof sumInsiderBuyValue    === 'function') ? sumInsiderBuyValue(r.ticker, cutoffMs)    : r.insider_buys_value;
+        return Object.assign({}, r, { insider_buys_distinct: d, insider_buys_value: v });
       };
-    });
-  },[xA,yA,sA]);
+      return dataRef.current.map(xform).filter(r=>{
+        if (!hotTiers.has(r.gi_tier)) return false;
+        if (r.manager_count < tv.minManagers) return false;
+        if (r.gi_score < tv.minGi) return false;
+        if (r.insider_buys_distinct < tv.minInsiders) return false;
+        if (tv.sector !== 'all' && r.sector !== tv.sector) return false;
+        if (tv.onlyInsiders && r.insider_buys_distinct < 1) return false;
+        return true;
+      });
+    }, [dataVer, hotTiers, tv.minManagers, tv.minGi, tv.minInsiders, tv.insiderWindow, tv.sector, tv.onlyInsiders, pinned]);
 
-  useEffect(()=>{
-    if(!axisMenu)return;
-    const close=()=>setAxisMenu(null);
-    setTimeout(()=>document.addEventListener('click',close,{once:true}),0);
-  },[axisMenu]);
+    const xA = AXES[tv.xAxis] || AXES.managers;
+    const yA = AXES[tv.yAxis] || AXES.gi;
+    const sA = AXES[tv.sizeAxis] || AXES.totalValue;
 
-  // GI tier toggle
-  useEffect(()=>{
-    const h=e=>{
-      const seg=e.target.closest('.gi-seg');if(!seg)return;
-      const tier=seg.dataset.tier;
-      setHotTiers(prev=>{
-        const n=new Set(prev);
-        if(n.has(tier))n.delete(tier);else n.add(tier);
-        return n.size===0?new Set(['dark-green','green','yellow','orange','red']):n;
+    const draw = useCallback(()=>{
+      const canvas = canvasRef.current; if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,rect.width,rect.height);
+      const W = rect.width, H = rect.height;
+      const pad = { l:56, r:16, t:16, b:36 };
+      const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+
+      const xVals = filtered.map(r=>xA.get(r)).filter(v=>v!=null && isFinite(v));
+      const yVals = filtered.map(r=>yA.get(r)).filter(v=>v!=null && isFinite(v));
+      const sVals = filtered.map(r=>sA.get(r)).filter(v=>v!=null && isFinite(v) && v>=0);
+
+      const empty = document.getElementById('bcEmptyState');
+      if (!xVals.length || !yVals.length){ if (empty) empty.style.display = 'flex'; return; }
+      if (empty) empty.style.display = 'none';
+
+      let [xMin, xMax] = view.xMin!=null ? [view.xMin,view.xMax] : axisRange(xVals, xA);
+      let [yMin, yMax] = view.yMin!=null ? [view.yMin,view.yMax] : axisRange(yVals, yA);
+
+      const xScale = v => pad.l + ((v - xMin)/(xMax - xMin))*pw;
+      const yScale = v => pad.t + (1 - (v - yMin)/(yMax - yMin))*ph;
+
+      const sMin = Math.min(...sVals, 0), sMax = Math.max(...sVals, 1);
+      const minR = 4, maxR = 26;
+      const rScale = v => {
+        if (sMax<=0) return minR;
+        const vv = Math.max(0, v||0);
+        if (sA.log){
+          const L = Math.log1p(vv), Lmin = Math.log1p(Math.max(0,sMin)), Lmax = Math.log1p(sMax);
+          if (Lmax===Lmin) return (minR+maxR)/2;
+          return minR + ((L-Lmin)/(Lmax-Lmin))*(maxR-minR);
+        }
+        const denom = (Math.sqrt(sMax) - Math.sqrt(Math.max(0,sMin))) || 1;
+        const n = (Math.sqrt(vv) - Math.sqrt(Math.max(0,sMin))) / denom;
+        return Math.max(minR, Math.min(maxR, minR + n*(maxR-minR)));
+      };
+
+      // Grid + ticks
+      ctx.strokeStyle = 'rgba(255,255,255,.04)';
+      ctx.font = '10px "JetBrains Mono"';
+      ctx.fillStyle = '#555';
+      const xStep = niceStep((xMax-xMin)/6);
+      for (let v = Math.ceil(xMin/xStep)*xStep; v <= xMax; v += xStep){
+        const x = xScale(v);
+        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H-pad.b); ctx.stroke();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText(xA.fmt(v).replace('$',''), x, H-pad.b+6);
+      }
+      const yStep = niceStep((yMax-yMin)/6);
+      for (let v = Math.ceil(yMin/yStep)*yStep; v <= yMax; v += yStep){
+        const y = yScale(v);
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W-pad.r, y); ctx.stroke();
+        ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.fillText(yA.fmt(v), pad.l-8, y);
+      }
+
+      // Bubbles
+      const pts = filtered.map(r=>{
+        const xv = xA.get(r), yv = yA.get(r), sv = sA.get(r);
+        if (xv==null || yv==null) return null;
+        return {
+          r: rScale(sv||0), sx: xScale(xv), sy: yScale(yv),
+          ticker:r.ticker, company:r.company, sector:r.sector,
+          giScore:r.gi_score, giTier:r.gi_tier, row:r,
+          pinned: pinned.has(r.ticker), selected: selected.has(r.ticker),
+        };
+      }).filter(Boolean);
+      pts.sort((a,b)=>b.r - a.r);
+
+      const colorFor = p => tv.viewMode==='sector' ? window.bcSectorColor(p.sector) : (TIER_COLOR[p.giTier]||'#999');
+
+      for (const p of pts){
+        const col = colorFor(p);
+        const isSrch = pulseTicker && p.ticker.toLowerCase().includes(pulseTicker.toLowerCase());
+        const dimmed = pulseTicker && !isSrch;
+        const alpha = dimmed ? 0.12 : (p.selected ? 1 : 0.75);
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, p.r, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = p.row.insider_buys_distinct > 0 ? 2.5 : 1.2;
+        ctx.stroke();
+        if (p.row.insider_buys_distinct > 0){
+          ctx.strokeStyle = 'rgba(251,191,36,'+(alpha*0.7)+')';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(p.sx, p.sy, p.r+3, 0, Math.PI*2); ctx.stroke();
+        }
+        if (p.pinned){
+          ctx.fillStyle = 'rgba(251,191,36,'+alpha+')';
+          ctx.beginPath(); ctx.arc(p.sx + p.r*0.7, p.sy - p.r*0.7, 3, 0, Math.PI*2); ctx.fill();
+        }
+        if (p.selected){
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(p.sx, p.sy, p.r+4, 0, Math.PI*2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      if (pulseTicker){
+        const pulse = (Date.now()/600) % 1;
+        for (const p of pts){
+          if (!p.ticker.toLowerCase().includes(pulseTicker.toLowerCase())) continue;
+          ctx.strokeStyle = 'rgba(255,255,255,'+(1-pulse)+')';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(p.sx, p.sy, p.r+4+pulse*18, 0, Math.PI*2); ctx.stroke();
+        }
+      }
+
+      // Labels
+      if (tv.showLabels){
+        const sorted = [...pts].sort((a,b)=>{
+          const sa = (a.pinned?1e9:0) + (a.selected?5e8:0) + a.r;
+          const sb = (b.pinned?1e9:0) + (b.selected?5e8:0) + b.r;
+          return sb - sa;
+        });
+        sorted.forEach(p => p._wantLabel = true);
+        placeLabels(sorted, ctx);
+        ctx.font = '600 10px "JetBrains Mono"';
+        sorted.forEach(p=>{
+          if (!p._labelBox) return;
+          const b = p._labelBox;
+          ctx.fillStyle = 'rgba(0,0,0,.55)';
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          ctx.fillStyle = p.selected ? '#fff' : 'rgba(234,234,234,.92)';
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(p.ticker, b.x+4, b.y + b.h/2);
+        });
+      }
+
+      canvas._pts = pts;
+      canvas._scale = { xScale, yScale, xMin, xMax, yMin, yMax, pad, W, H };
+
+      const rcS = document.getElementById('bcRcShown');
+      const rcT = document.getElementById('bcRcTotal');
+      if (rcS) rcS.textContent = filtered.length;
+      if (rcT) rcT.textContent = dataRef.current.length;
+    }, [filtered, xA, yA, sA, tv.showLabels, tv.viewMode, pinned, selected, pulseTicker, view]);
+
+    useEffect(()=>{ draw(); }, [draw]);
+    useEffect(()=>{
+      const ro = new ResizeObserver(()=>draw());
+      if (canvasRef.current) ro.observe(canvasRef.current.parentElement);
+      return ()=>ro.disconnect();
+    }, [draw]);
+    useEffect(()=>{
+      if (!pulseTicker) return;
+      let raf;
+      const tick = ()=>{ draw(); raf = requestAnimationFrame(tick); };
+      tick(); return ()=>cancelAnimationFrame(raf);
+    }, [pulseTicker, draw]);
+
+    // Hit testing
+    const hitTest = (mx, my)=>{
+      const canvas = canvasRef.current;
+      if (!canvas || !canvas._pts) return null;
+      const rect = canvas.getBoundingClientRect();
+      const x = mx - rect.left, y = my - rect.top;
+      for (let i = canvas._pts.length-1; i >= 0; i--){
+        const p = canvas._pts[i];
+        const dx = x-p.sx, dy = y-p.sy;
+        if (dx*dx + dy*dy <= (p.r+2)*(p.r+2)) return p;
+      }
+      return null;
+    };
+
+    const onMouseMove = e => {
+      // Hide hover tooltip while panning
+      if (panning) {
+        if (hoverPt && typeof window.hideBubbleTip === 'function') window.hideBubbleTip();
+        setHoverPt(null);
+        return;
+      }
+      const p = hitTest(e.clientX, e.clientY);
+      if (p){
+        setHoverPt(p);
+        // Delegate to existing TradingView tooltip
+        if (typeof window.showBubbleTip === 'function'){
+          window.showBubbleTip({
+            _t: p.ticker, _c: p.company,
+            _gi: p.giScore, _tier: p.giTier,
+            _v: window.fmtMoney(p.row.total_value),
+            _ib: p.row.insider_buys_distinct
+          }, e);
+        }
+      } else {
+        if (hoverPt && typeof window.hideBubbleTip === 'function') window.hideBubbleTip();
+        setHoverPt(null);
+      }
+    };
+    const onMouseLeave = ()=>{
+      if (typeof window.hideBubbleTip === 'function') window.hideBubbleTip();
+      setHoverPt(null);
+    };
+    const onMouseDown = e => {
+      if (e.button !== 0) return;
+      const p = hitTest(e.clientX, e.clientY);
+      if (p) {
+        // Click on a bubble: open buy-levels chart for that ticker
+        if (typeof window.goChart === 'function') window.goChart(p.ticker);
+      } else {
+        // Click on empty area: start panning. Capture the *actual* current view
+        // (auto-computed from data if no zoom is set) so pan deltas use a real range.
+        const sc = canvasRef.current && canvasRef.current._scale;
+        const startView = (view.xMin != null) ? { ...view }
+          : (sc ? { xMin: sc.xMin, xMax: sc.xMax, yMin: sc.yMin, yMax: sc.yMax }
+                : { xMin: 0, xMax: 1, yMin: 0, yMax: 1 });
+        setPanning({ startX: e.clientX, startY: e.clientY, view: startView });
+      }
+    };
+    const onMouseUp = e => {
+      if (panning) { setPanning(false); return; }
+    };
+    const onDoubleClick = ()=>{ setView({ xMin:null, xMax:null, yMin:null, yMax:null }); setSelected(new Set()); };
+    const onWheel = e => {
+      e.preventDefault();
+      const canvas = canvasRef.current;
+      const sc = canvas?._scale; if (!sc) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+      const { xMin, xMax, yMin, yMax, pad, W, H } = sc;
+      const pw = W-pad.l-pad.r, ph = H-pad.t-pad.b;
+      const xAt = xMin + ((mx-pad.l)/pw)*(xMax-xMin);
+      const yAt = yMin + (1 - (my-pad.t)/ph)*(yMax-yMin);
+      const f = e.deltaY<0 ? 0.85 : 1/0.85;
+      setView({
+        xMin: xAt + (xMin-xAt)*f, xMax: xAt + (xMax-xAt)*f,
+        yMin: yAt + (yMin-yAt)*f, yMax: yAt + (yMax-yAt)*f,
       });
     };
-    const el=document.getElementById('giScale');
-    el?.addEventListener('click',h);
-    return()=>el?.removeEventListener('click',h);
-  },[]);
-
-  useEffect(()=>{
-    document.querySelectorAll('#giScale .gi-seg').forEach(seg=>{
-      if(hotTiers.has(seg.dataset.tier))seg.classList.remove('dim');
-      else seg.classList.add('dim');
-    });
-  },[hotTiers]);
-
-  // view mode segmented control
-  useEffect(()=>{
-    const h=e=>{const btn=e.target.closest('.seg-btn');if(btn)t.set({viewMode:btn.dataset.mode});};
-    const el=document.getElementById('viewModeSeg');
-    el?.addEventListener('click',h);
-    return()=>el?.removeEventListener('click',h);
-  },[]);
-  useEffect(()=>{
-    document.querySelectorAll('#viewModeSeg .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===tv.viewMode));
-  },[tv.viewMode]);
-
-  // search
-  useEffect(()=>{
-    const inp=document.getElementById('searchInput');if(!inp)return;
-    const h=()=>{
-      const v=inp.value.trim();
-      setSearch(v);setPulseTicker(v||null);
-      if(v){
-        const matches=dataRef.current.filter(r=>r.ticker.toLowerCase().includes(v.toLowerCase())||r.company.toLowerCase().includes(v.toLowerCase()));
-        setSelected(new Set(matches.slice(0,10).map(r=>r.ticker)));
-      } else setSelected(new Set());
-    };
-    inp.addEventListener('input',h);
-    return()=>inp.removeEventListener('input',h);
-  },[]);
-
-  // selection rail
-  const selectedRows=useMemo(()=>dataRef.current.filter(r=>selected.has(r.ticker)),[selected,rowsVersion]);
-  useEffect(()=>{
-    const rail=document.getElementById('bc-rail');
-    const inner=document.getElementById('bc-railInner');
-    if(!rail||!inner)return;
-    const open=selectedRows.length>0||pinned.size>0;
-    rail.classList.toggle('open',open);
-    if(!open){inner.innerHTML='';return;}
-    const displayRows=selectedRows.length>0?selectedRows:dataRef.current.filter(r=>pinned.has(r.ticker));
-    const avgGi=displayRows.reduce((s,r)=>s+r.gi_score,0)/displayRows.length;
-    const totalV=displayRows.reduce((s,r)=>s+r.total_value,0);
-    const insCount=displayRows.filter(r=>r.insider_buys_distinct>0).length;
-    const rowsHtml=(rows,title)=>`
-      <div class="rail-section-title">${title}</div>
-      <div class="rail-list">
-        ${rows.map(r=>`
-          <div class="rail-row" data-tk="${r.ticker}">
-            <span class="dot" style="background:${TIER_COLOR[r.gi_tier]}"></span>
-            <span><div class="tk">${r.ticker}</div><div class="co">${r.company}</div></span>
-            <span class="gi" style="color:${TIER_COLOR[r.gi_tier]}">${r.gi_score.toFixed(0)}</span>
-            <button class="star ${pinned.has(r.ticker)?'on':''}" data-pin="${r.ticker}">${pinned.has(r.ticker)?'★':'☆'}</button>
-          </div>`).join('')}
-      </div>`;
-    const pinnedRows=dataRef.current.filter(r=>pinned.has(r.ticker));
-    const showSel=selectedRows.length>0;
-    const showPin=pinned.size>0&&!selectedRows.some(r=>pinned.has(r.ticker));
-    inner.innerHTML=`
-      <div class="rail-head">
-        <h3>${showSel?`Selection (${selectedRows.length})`:'Pinned'}</h3>
-        <button class="close" id="bcRailClose">×</button>
-      </div>
-      <div class="rail-stats">
-        <div class="rail-stat"><div class="rail-stat-lbl">Avg GI</div><div class="rail-stat-val" style="color:${window.giColor(avgGi)}">${avgGi.toFixed(1)}</div></div>
-        <div class="rail-stat"><div class="rail-stat-lbl">Tickers</div><div class="rail-stat-val">${displayRows.length}</div></div>
-        <div class="rail-stat"><div class="rail-stat-lbl">Total Held</div><div class="rail-stat-val" style="color:#86efac">${window.fmtMoney(totalV)}</div></div>
-        <div class="rail-stat"><div class="rail-stat-lbl">Insiders</div><div class="rail-stat-val">${insCount}/${displayRows.length}</div></div>
-      </div>
-      ${showSel?rowsHtml(selectedRows.slice(0,60),`${selectedRows.length} selected`):''}
-      ${showPin?rowsHtml(pinnedRows,`${pinnedRows.length} pinned`):''}
-    `;
-    document.getElementById('bcRailClose').onclick=()=>setSelected(new Set());
-    inner.querySelectorAll('[data-pin]').forEach(btn=>{
-      btn.onclick=e=>{
-        e.stopPropagation();
-        const tk=btn.dataset.pin;
-        setPinned(prev=>{const n=new Set(prev);if(n.has(tk))n.delete(tk);else n.add(tk);return n;});
+    useEffect(()=>{
+      if (!panning) return;
+      const onMove = e => {
+        const sc = canvasRef.current?._scale; if (!sc) return;
+        const { pad, W, H } = sc;
+        const pw = W-pad.l-pad.r, ph = H-pad.t-pad.b;
+        const dx = (e.clientX - panning.startX)/pw;
+        const dy = (e.clientY - panning.startY)/ph;
+        const v = panning.view;
+        const xr = v.xMax - v.xMin;
+        const yr = v.yMax - v.yMin;
+        setView({
+          xMin: v.xMin - dx*xr, xMax: v.xMax - dx*xr,
+          yMin: v.yMin + dy*yr, yMax: v.yMax + dy*yr,
+        });
       };
-    });
-    inner.querySelectorAll('.rail-row').forEach(row=>{
-      row.onclick=()=>setSelected(new Set([row.dataset.tk]));
-    });
-  },[selectedRows,pinned]);
+      const onUp = ()=>setPanning(false);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      return ()=>{ window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    }, [panning]);
 
-  // tooltip
-  useEffect(()=>{
-    const tip=document.getElementById('bc-tip');if(!tip)return;
-    if(!hoverPt){tip.classList.remove('show');return;}
-    const p=hoverPt, row=p.row;
-    const tierCol=TIER_COLOR[p.giTier];
-    const sectorCol=(window.SECTOR_COLORS[p.sector]||'#888');
-    const arch=ARCHETYPE[row.archetype]||ARCHETYPE.neutral;
-    tip.innerHTML=`
-      <div class="tip-head">
-        <span class="tip-tk" style="color:${tierCol}">${p.ticker}</span>
-        <span class="tip-co" title="${p.company}">${p.company}</span>
-        <span class="tip-sector" style="color:${sectorCol}">${p.sector||'—'}</span>
-      </div>
-      <div class="tip-body">
-        <div class="tip-row"><span class="lbl">GI Score</span><span class="val" style="color:${tierCol}">${p.giScore.toFixed(1)}</span></div>
-        <div class="tip-row"><span class="lbl">Managers</span><span class="val">${row.manager_count}</span></div>
-        <div class="tip-row"><span class="lbl">Held</span><span class="val" style="color:#86efac">${window.fmtMoney(row.total_value)}</span></div>
-        <div class="tip-row"><span class="lbl">New positions</span><span class="val">${row.new_count} · ${window.fmtMoney(row.new_value)}</span></div>
-        ${row.insider_buys_distinct>0?`<div class="tip-row"><span class="lbl">Insider buys</span><span class="val" style="color:#fbbf24">${row.insider_buys_distinct} · ${window.fmtMoney(row.insider_buys_value)}</span></div>`:''}
-        <div class="tip-arch"><span class="arch-icon">${arch.icon}</span>${arch.text}</div>
-      </div>
-      <div class="tip-hint">click to select · ★ to pin · shift-drag to pan</div>
-    `;
-    tip.classList.add('show');
-    const w=tip.offsetWidth||270, h=tip.offsetHeight||220;
-    let left=hoverPos.x+18, top=hoverPos.y-h/2;
-    if(left+w>window.innerWidth-12)left=hoverPos.x-w-18;
-    top=Math.max(12,Math.min(top,window.innerHeight-h-12));
-    tip.style.left=left+'px'; tip.style.top=top+'px';
-  },[hoverPt,hoverPos]);
+    // Tier toggle via legend
+    useEffect(()=>{
+      const el = document.getElementById('bcGiScale'); if (!el) return;
+      const handler = e => {
+        const seg = e.target.closest('.bc-gi-seg'); if (!seg) return;
+        const tier = seg.dataset.tier;
+        setHotTiers(prev=>{
+          const n = new Set(prev);
+          if (n.has(tier)) n.delete(tier); else n.add(tier);
+          if (n.size===0) return new Set(['dark-green','green','yellow','orange','red']);
+          return n;
+        });
+      };
+      el.addEventListener('click', handler);
+      return ()=>el.removeEventListener('click', handler);
+    }, []);
+    useEffect(()=>{
+      document.querySelectorAll('#bcGiScale .bc-gi-seg').forEach(seg=>{
+        seg.classList.toggle('dim', !hotTiers.has(seg.dataset.tier));
+      });
+    }, [hotTiers]);
 
-  // chip popovers
-  const openPop=id=>{
-    const el=chipRefs.current[id];if(!el)return;
-    const r=el.getBoundingClientRect();
-    setPopPos({x:r.left,y:r.bottom+6});setOpenChip(id);
-  };
-  const closePop=()=>setOpenChip(null);
-  useEffect(()=>{
-    if(!openChip)return;
-    const h=e=>{if(!e.target.closest('.pop')&&!e.target.closest('[data-chip]'))closePop();};
-    document.addEventListener('mousedown',h);
-    return()=>document.removeEventListener('mousedown',h);
-  },[openChip]);
+    // View-mode segmented control
+    useEffect(()=>{
+      const el = document.getElementById('bcViewModeSeg'); if (!el) return;
+      const onClick = e => {
+        const btn = e.target.closest('.bc-seg-btn'); if (!btn) return;
+        setTweak('viewMode', btn.dataset.mode);
+      };
+      el.addEventListener('click', onClick);
+      return ()=>el.removeEventListener('click', onClick);
+    }, []);
+    useEffect(()=>{
+      document.querySelectorAll('#bcViewModeSeg .bc-seg-btn').forEach(b=>{
+        b.classList.toggle('active', b.dataset.mode === tv.viewMode);
+      });
+    }, [tv.viewMode]);
 
-  const AXIS_OPTS=Object.entries(AXES).map(([k,a])=>({value:k,label:a.label,sub:a.short}));
-  const SECTOR_OPTS=[{value:'all',label:'All sectors'},...Object.keys(window.SECTOR_COLORS).map(s=>({value:s,label:s}))];
-  const TIERS=[
-    {k:'dark-green',label:'Strong Accum',color:TIER_COLOR['dark-green']},
-    {k:'green',label:'Accumulation',color:TIER_COLOR['green']},
-    {k:'yellow',label:'Neutral',color:TIER_COLOR['yellow']},
-    {k:'orange',label:'Distribution',color:TIER_COLOR['orange']},
-    {k:'red',label:'Heavy Dist',color:TIER_COLOR['red']},
-  ];
+    // (search removed)
 
-  const chipDefs=[
-    {id:'xAxis',label:'X',val:AXES[tv.xAxis].short,active:true,render:()=>(
-      <div><div className="pop-title">X Axis</div>
-        {AXIS_OPTS.map(o=><div key={o.value} className={'pop-item'+(tv.xAxis===o.value?' on':'')}
-          onClick={()=>{t.set({xAxis:o.value});closePop();}}>
-          <span className="check">✓</span><span>{o.label}</span><span className="sub">{o.sub}</span>
-        </div>)}
-      </div>
-    )},
-    {id:'yAxis',label:'Y',val:AXES[tv.yAxis].short,active:true,render:()=>(
-      <div><div className="pop-title">Y Axis</div>
-        {AXIS_OPTS.map(o=><div key={o.value} className={'pop-item'+(tv.yAxis===o.value?' on':'')}
-          onClick={()=>{t.set({yAxis:o.value});closePop();}}>
-          <span className="check">✓</span><span>{o.label}</span><span className="sub">{o.sub}</span>
-        </div>)}
-      </div>
-    )},
-    {id:'sizeAxis',label:'Size',val:AXES[tv.sizeAxis].short,active:true,render:()=>(
-      <div><div className="pop-title">Bubble Size</div>
-        {AXIS_OPTS.map(o=><div key={o.value} className={'pop-item'+(tv.sizeAxis===o.value?' on':'')}
-          onClick={()=>{t.set({sizeAxis:o.value});closePop();}}>
-          <span className="check">✓</span><span>{o.label}</span><span className="sub">{o.sub}</span>
-        </div>)}
-      </div>
-    )},
-    {id:'minMgrs',label:'Min Mgrs',val:tv.minManagers,active:tv.minManagers>1,render:()=>(
-      <div><div className="pop-title">Min Managers Holding</div>
-        <div className="pop-row">
-          <input type="range" min="1" max="80" step="1" value={tv.minManagers} onChange={e=>t.set({minManagers:+e.target.value})}/>
-          <div className="val">{tv.minManagers}</div>
+    // Axis-meta strip click handlers + label sync
+    useEffect(()=>{
+      const xL = document.getElementById('bcXAxisLabel');
+      const yL = document.getElementById('bcYAxisLabel');
+      const sL = document.getElementById('bcSizeLabel');
+      const cycle = (cur, kind) => {
+        const keys = Object.keys(AXES);
+        const idx = keys.indexOf(cur);
+        const next = keys[(idx+1) % keys.length];
+        if (kind==='x') setTweak('xAxis', next);
+        if (kind==='y') setTweak('yAxis', next);
+        if (kind==='s') setTweak('sizeAxis', next);
+      };
+      if (xL){ xL.textContent = xA.label; xL.onclick = ()=>cycle(tv.xAxis,'x'); }
+      if (yL){ yL.textContent = yA.label; yL.onclick = ()=>cycle(tv.yAxis,'y'); }
+      if (sL){ sL.textContent = sA.label; sL.onclick = ()=>cycle(tv.sizeAxis,'s'); }
+    }, [xA, yA, sA, tv.xAxis, tv.yAxis, tv.sizeAxis]);
+
+    // Selection rail
+    const selectedRows = useMemo(()=> dataRef.current.filter(r => selected.has(r.ticker)), [dataVer, selected]);
+    useEffect(()=>{
+      const rail = document.getElementById('bcRail');
+      const inner = document.getElementById('bcRailInner');
+      if (!rail || !inner) return;
+      const open = selectedRows.length > 0 || pinned.size > 0;
+      rail.classList.toggle('open', open);
+      if (!open){ inner.innerHTML = ''; return; }
+      const pinnedRows = dataRef.current.filter(r => pinned.has(r.ticker));
+      const showSelected = selectedRows.length > 0;
+      const showPinned = pinned.size > 0 && !selectedRows.some(r => pinned.has(r.ticker));
+      const stats = (()=>{
+        const rows = showSelected ? selectedRows : pinnedRows;
+        if (!rows.length) return null;
+        const avgGi = rows.reduce((s,r)=>s+r.gi_score,0)/rows.length;
+        const totalV = rows.reduce((s,r)=>s+r.total_value,0);
+        const totalNew = rows.reduce((s,r)=>s+r.new_value,0);
+        const insiderCount = rows.filter(r=>r.insider_buys_distinct>0).length;
+        return { count: rows.length, avgGi, totalV, totalNew, insiderCount };
+      })();
+      const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+      const rowHtml = (r) => `
+        <div class="bc-rail-row" data-tk="${esc(r.ticker)}">
+          <span class="dot" style="background:${TIER_COLOR[r.gi_tier]||'#888'}"></span>
+          <span><div class="tk">${esc(r.ticker)}</div><div class="co">${esc(r.company||'')}</div></span>
+          <span class="gi" style="color:${TIER_COLOR[r.gi_tier]||'#888'}">${(r.gi_score||0).toFixed(0)}</span>
+          <button class="star ${pinned.has(r.ticker)?'on':''}" data-pin="${esc(r.ticker)}">${pinned.has(r.ticker)?'★':'☆'}</button>
+        </div>`;
+      inner.innerHTML = `
+        <div class="bc-rail-head">
+          <h3>${showSelected ? 'Selection ('+selectedRows.length+')' : 'Pinned'}</h3>
+          <button class="close" id="bcRailClose">×</button>
         </div>
-        <div className="pop-sep"></div>
-        <button className="pop-btn" onClick={()=>t.set({minManagers:1})}>Reset</button>
-      </div>
-    )},
-    {id:'minGi',label:'Min GI',val:tv.minGi,active:tv.minGi>0,render:()=>(
-      <div><div className="pop-title">Min GI Score</div>
-        <div className="pop-row">
-          <input type="range" min="0" max="100" step="5" value={tv.minGi} onChange={e=>t.set({minGi:+e.target.value})}/>
-          <div className="val">{tv.minGi}</div>
+        ${stats ? `
+        <div class="bc-rail-stats">
+          <div class="bc-rail-stat"><div class="bc-rail-stat-lbl">Avg GI</div><div class="bc-rail-stat-val" style="color:${window.giColor(stats.avgGi)}">${stats.avgGi.toFixed(1)}</div></div>
+          <div class="bc-rail-stat"><div class="bc-rail-stat-lbl">Tickers</div><div class="bc-rail-stat-val">${stats.count}</div></div>
+          <div class="bc-rail-stat"><div class="bc-rail-stat-lbl">Total Held</div><div class="bc-rail-stat-val" style="color:#86efac">${window.fmtMoney(stats.totalV)}</div></div>
+          <div class="bc-rail-stat"><div class="bc-rail-stat-lbl">New $</div><div class="bc-rail-stat-val" style="color:#fbbf24">${window.fmtMoney(stats.totalNew)}</div></div>
+          <div class="bc-rail-stat"><div class="bc-rail-stat-lbl">Insiders</div><div class="bc-rail-stat-val">${stats.insiderCount}/${stats.count}</div></div>
+        </div>` : ''}
+        ${showSelected ? `<div class="bc-rail-section-title">${selectedRows.length} selected</div><div class="bc-rail-list">${selectedRows.slice(0,60).map(rowHtml).join('')}</div>` : ''}
+        ${showPinned ? `<div class="bc-rail-section-title">${pinnedRows.length} pinned</div><div class="bc-rail-list">${pinnedRows.map(rowHtml).join('')}</div>` : ''}
+      `;
+      const closeBtn = inner.querySelector('#bcRailClose');
+      if (closeBtn) closeBtn.onclick = ()=>setSelected(new Set());
+      inner.querySelectorAll('[data-pin]').forEach(btn=>{
+        btn.onclick = e => {
+          e.stopPropagation();
+          const tk = btn.dataset.pin;
+          setPinned(prev=>{
+            const n = new Set(prev);
+            if (n.has(tk)) n.delete(tk); else n.add(tk);
+            return n;
+          });
+        };
+      });
+      inner.querySelectorAll('.bc-rail-row').forEach(row=>{
+        row.onclick = ()=>{
+          if (typeof window.goChart === 'function') window.goChart(row.dataset.tk);
+        };
+      });
+    }, [dataVer, selectedRows, pinned, selected]);
+
+    // ---- chip popover system ----
+    const [openChip, setOpenChip] = useState(null);
+    const [popPos, setPopPos] = useState({ x:0, y:0 });
+    const chipRefs = useRef({});
+
+    useEffect(()=>{
+      if (!openChip) return;
+      const h = e => {
+        if (e.target.closest('.bc-pop') || e.target.closest('[data-bc-chip]')) return;
+        setOpenChip(null);
+      };
+      document.addEventListener('mousedown', h);
+      return ()=>document.removeEventListener('mousedown', h);
+    }, [openChip]);
+
+    const openPop = id => {
+      const el = chipRefs.current[id]; if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPopPos({ x: r.left, y: r.bottom + 6 });
+      setOpenChip(id);
+    };
+    const closePop = ()=>setOpenChip(null);
+
+    const AXIS_OPTS = Object.entries(AXES).map(([k,a])=>({ value:k, label:a.label, sub:a.short }));
+    const SECTOR_OPTS = [{ value:'all', label:'All sectors' }, ...Object.keys(window.SECTOR_COLORS).map(s=>({ value:s, label:s }))];
+    const TIERS = [
+      { k:'dark-green', label:'Strong Accum',  color:TIER_COLOR['dark-green'] },
+      { k:'green',      label:'Accumulation',  color:TIER_COLOR['green'] },
+      { k:'yellow',     label:'Neutral',       color:TIER_COLOR['yellow'] },
+      { k:'orange',     label:'Distribution',  color:TIER_COLOR['orange'] },
+      { k:'red',        label:'Heavy Dist',    color:TIER_COLOR['red'] },
+    ];
+    const activeTierCount = hotTiers.size;
+
+    const chipDefs = [
+      { id:'xAxis', label:'X', val:xA.label, active:true, render:()=>(
+        <div><div className="bc-pop-title">X Axis</div>
+          {AXIS_OPTS.map(o=>(
+            <div key={o.value} className={'bc-pop-item'+(tv.xAxis===o.value?' on':'')}
+              onClick={()=>{ setTweak('xAxis', o.value); closePop(); }}>
+              <span className="check">✓</span><span>{o.label}</span><span className="sub">{o.sub}</span>
+            </div>))}
         </div>
-        <div className="pop-sep"></div>
-        <button className="pop-btn" onClick={()=>t.set({minGi:0})}>Reset</button>
-      </div>
-    )},
-    {id:'sector',label:'Sector',val:tv.sector==='all'?'All':tv.sector,active:tv.sector!=='all',render:()=>(
-      <div style={{maxHeight:280,overflowY:'auto'}}>
-        <div className="pop-title">Sector</div>
-        {SECTOR_OPTS.map(o=><div key={o.value} className={'pop-item'+(tv.sector===o.value?' on':'')}
-          onClick={()=>{t.set({sector:o.value});closePop();}}>
-          <span className="check">✓</span>
-          {o.value!=='all'&&<span style={{width:8,height:8,borderRadius:'50%',background:window.SECTOR_COLORS[o.value],display:'inline-block'}}></span>}
-          <span>{o.label}</span>
-        </div>)}
-      </div>
-    )},
-    {id:'tiers',label:'GI Tiers',val:hotTiers.size===5?'All':`${hotTiers.size}/5`,active:hotTiers.size<5,render:()=>(
-      <div><div className="pop-title">GI Tiers</div>
-        {TIERS.map(ti=>{
-          const on=hotTiers.has(ti.k);
-          return(<div key={ti.k} className={'pop-toggle'+(on?' on':'')}
-            onClick={()=>setHotTiers(prev=>{const n=new Set(prev);if(n.has(ti.k))n.delete(ti.k);else n.add(ti.k);return n.size===0?new Set(['dark-green','green','yellow','orange','red']):n;})}>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{width:10,height:10,borderRadius:'50%',background:ti.color,display:'inline-block'}}></span>
-              <span className="label">{ti.label}</span>
+      )},
+      { id:'yAxis', label:'Y', val:yA.label, active:true, render:()=>(
+        <div><div className="bc-pop-title">Y Axis</div>
+          {AXIS_OPTS.map(o=>(
+            <div key={o.value} className={'bc-pop-item'+(tv.yAxis===o.value?' on':'')}
+              onClick={()=>{ setTweak('yAxis', o.value); closePop(); }}>
+              <span className="check">✓</span><span>{o.label}</span><span className="sub">{o.sub}</span>
+            </div>))}
+        </div>
+      )},
+      { id:'sAxis', label:'Size', val:sA.label, active:true, render:()=>(
+        <div><div className="bc-pop-title">Bubble Size</div>
+          {AXIS_OPTS.map(o=>(
+            <div key={o.value} className={'bc-pop-item'+(tv.sizeAxis===o.value?' on':'')}
+              onClick={()=>{ setTweak('sizeAxis', o.value); closePop(); }}>
+              <span className="check">✓</span><span>{o.label}</span><span className="sub">{o.sub}</span>
+            </div>))}
+        </div>
+      )},
+      { id:'minMgrs', label:'Min Mgrs', val:tv.minManagers, active:tv.minManagers>1, render:()=>(
+        <div><div className="bc-pop-title">Min Managers Holding</div>
+          <div className="bc-pop-row">
+            <input type="range" min="1" max="50" step="1" value={tv.minManagers}
+              onChange={e=>setTweak('minManagers', +e.target.value)} />
+            <div className="val">{tv.minManagers}</div>
+          </div>
+          <div className="bc-pop-sep"></div>
+          <button className="bc-pop-btn" onClick={()=>setTweak('minManagers', 1)}>Reset</button>
+        </div>
+      )},
+      { id:'minGi', label:'Min GI', val:tv.minGi, active:tv.minGi>0, render:()=>(
+        <div><div className="bc-pop-title">Min GI Score</div>
+          <div className="bc-pop-row">
+            <input type="range" min="0" max="100" step="5" value={tv.minGi}
+              onChange={e=>setTweak('minGi', +e.target.value)} />
+            <div className="val">{tv.minGi}</div>
+          </div>
+          <div className="bc-pop-sep"></div>
+          <button className="bc-pop-btn" onClick={()=>setTweak('minGi', 0)}>Reset</button>
+        </div>
+      )},
+      { id:'minInsiders', label:'Min Insiders', val:tv.minInsiders, active:tv.minInsiders>0, render:()=>(
+        <div><div className="bc-pop-title">Min Distinct Insiders</div>
+          <div className="bc-pop-row">
+            <input type="range" min="0" max="20" step="1" value={tv.minInsiders}
+              onChange={e=>setTweak('minInsiders', +e.target.value)} />
+            <div className="val">{tv.minInsiders}</div>
+          </div>
+          <div className="bc-pop-sep"></div>
+          <button className="bc-pop-btn" onClick={()=>setTweak('minInsiders', 0)}>Reset</button>
+        </div>
+      )},
+      { id:'insiderWindow', label:'Within', val: INSIDER_WINDOW_LABEL(tv.insiderWindow), active: tv.insiderWindow>0, render:()=>(
+        <div><div className="bc-pop-title">Insider Buys Within</div>
+          {INSIDER_WINDOWS.map(o=>(
+            <div key={o.v} className={'bc-pop-item'+(tv.insiderWindow===o.v?' on':'')}
+              onClick={()=>{ setTweak('insiderWindow', o.v); closePop(); }}>
+              <span className="check">✓</span><span>{o.label}</span>
             </div>
-            <div className="pop-sw"></div>
-          </div>);
-        })}
-        <div className="pop-sep"></div>
-        <button className="pop-btn" onClick={()=>setHotTiers(new Set(['dark-green','green','yellow','orange','red']))}>All tiers</button>
-      </div>
-    )},
-    {id:'insiders',label:'',val:'Insider buys only',active:tv.onlyInsiders,
-      direct:()=>t.set({onlyInsiders:!tv.onlyInsiders})},
-    {id:'pinnedOnly',label:'',val:`★ Pinned${pinned.size?` (${pinned.size})`:''}`,active:tv.onlyPinned,
-      direct:()=>t.set({onlyPinned:!tv.onlyPinned})},
-    {id:'display',label:'Display',val:[tv.showQuadrants&&'Q',tv.showLabels&&'Labels'].filter(Boolean).join('+'),active:true,render:()=>(
-      <div><div className="pop-title">Display</div>
-        <div className={'pop-toggle'+(tv.showQuadrants?' on':'')} onClick={()=>t.set({showQuadrants:!tv.showQuadrants})}>
-          <span className="label">Quadrant dividers</span><div className="pop-sw"></div>
+          ))}
         </div>
-        <div className={'pop-toggle'+(tv.showLabels?' on':'')} onClick={()=>t.set({showLabels:!tv.showLabels})}>
-          <span className="label">Smart ticker labels</span><div className="pop-sw"></div>
+      )},
+      { id:'sector', label:'Sector', val: tv.sector==='all'?'All':tv.sector, active: tv.sector!=='all', render:()=>(
+        <div style={{ maxHeight:300, overflowY:'auto' }}>
+          <div className="bc-pop-title">Sector</div>
+          {SECTOR_OPTS.map(o=>(
+            <div key={o.value} className={'bc-pop-item'+(tv.sector===o.value?' on':'')}
+              onClick={()=>{ setTweak('sector', o.value); closePop(); }}>
+              <span className="check">✓</span>
+              {o.value!=='all' && <span style={{ width:8, height:8, borderRadius:'50%', background:window.SECTOR_COLORS[o.value], display:'inline-block' }}></span>}
+              <span>{o.label}</span>
+            </div>))}
         </div>
-        <div className="pop-row">
-          <label>Density</label>
-          <input type="range" min="4" max="40" step="1" value={tv.labelDensity} onChange={e=>t.set({labelDensity:+e.target.value})}/>
-          <div className="val">{tv.labelDensity}</div>
+      )},
+      { id:'insiders', label:'', val:'Insider buys only', active:tv.onlyInsiders, direct:()=>setTweak('onlyInsiders', !tv.onlyInsiders) },
+      { id:'display', label:'Labels', val: tv.showLabels?('On · '+tv.labelDensity):'Off', active:true, render:()=>(
+        <div><div className="bc-pop-title">Ticker Labels</div>
+          <div className={'bc-pop-toggle'+(tv.showLabels?' on':'')} onClick={()=>setTweak('showLabels', !tv.showLabels)}>
+            <span className="label">Smart ticker labels</span><div className="bc-pop-sw"></div>
+          </div>
+          <div className="bc-pop-row">
+            <label>Density</label>
+            <input type="range" min="4" max="40" step="1" value={tv.labelDensity}
+              onChange={e=>setTweak('labelDensity', +e.target.value)} />
+            <div className="val">{tv.labelDensity}</div>
+          </div>
         </div>
-      </div>
-    )},
-    {id:'actions',label:'',val:'Actions ▾',active:false,render:()=>(
-      <div><div className="pop-title">Actions</div>
-        <button className="pop-btn" style={{marginBottom:4}} onClick={()=>{setView({xMin:null,xMax:null,yMin:null,yMax:null});closePop();}}>
-          Reset zoom{view.xMin!=null?' •':''}
-        </button>
-        <button className="pop-btn" style={{marginBottom:4}} onClick={()=>{setSelected(new Set());closePop();}}>
-          Clear selection{selected.size?` (${selected.size})`:''}
-        </button>
-        <button className="pop-btn" style={{marginBottom:4}} onClick={()=>{setPinned(new Set());closePop();}}>
-          Clear pins{pinned.size?` (${pinned.size})`:''}
-        </button>
-        <div className="pop-sep"></div>
-        <button className="pop-btn danger" onClick={()=>{
-          t.set({minManagers:1,minGi:0,sector:'all',onlyInsiders:false,onlyPinned:false});
-          setHotTiers(new Set(['dark-green','green','yellow','orange','red']));
-          setSearch('');setPulseTicker(null);
-          const inp=document.getElementById('searchInput');if(inp)inp.value='';
-          closePop();
-        }}>Reset all filters</button>
-      </div>
-    )},
-  ];
+      )},
+    ];
 
-  const chipsHost=document.getElementById('chipsWrap');
-  const activeDef=chipDefs.find(c=>c.id===openChip);
-
-  return (<>
-    {axisMenu&&ReactDOM.createPortal(
-      <div className="bc-menu" style={{left:axisMenu.x,top:axisMenu.y}} onClick={e=>e.stopPropagation()}>
-        <div className="bc-menu-title">{axisMenu.kind==='x'?'X Axis':axisMenu.kind==='y'?'Y Axis':'Bubble Size'}</div>
-        {Object.entries(AXES).map(([k,a])=>{
-          const cur=axisMenu.kind==='x'?tv.xAxis:axisMenu.kind==='y'?tv.yAxis:tv.sizeAxis;
-          return(<div key={k} className={'bc-menu-item'+(cur===k?' on':'')} onClick={()=>{
-            if(axisMenu.kind==='x')t.set({xAxis:k});
-            if(axisMenu.kind==='y')t.set({yAxis:k});
-            if(axisMenu.kind==='s')t.set({sizeAxis:k});
-            setAxisMenu(null);
-          }}><span className="check">✓</span><span>{a.label}</span><span className="sub">{a.short}</span></div>);
-        })}
-      </div>, document.body
-    )}
-
-    <canvas ref={canvasRef} id="bcChartCanvas"
-      onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}
-      onMouseDown={onMouseDown} onMouseUp={onMouseUp}
-      onDoubleClick={onDoubleClick} onWheel={onWheel}
-      style={{display:'block'}}
-    />
-
-    {chipsHost&&ReactDOM.createPortal(
+    const chipsHost = document.getElementById('bcChipsWrap');
+    const chipsNode = (
       <>
         {chipDefs.map(c=>(
-          <div key={c.id} ref={el=>chipRefs.current[c.id]=el} data-chip={c.id}
-            className={'chip control'+(c.active?' active':'')+(c.id==='actions'?' action':'')}
-            onClick={()=>{if(c.direct){c.direct();return;}if(openChip===c.id)closePop();else openPop(c.id);}}>
-            {c.label&&<span className="chip-label">{c.label}</span>}
-            <span className="chip-val">{c.val}</span>
-            {c.render&&<span className="chip-caret">▾</span>}
+          <div key={c.id}
+            ref={el=>chipRefs.current[c.id]=el}
+            data-bc-chip={c.id}
+            className={'bc-chip control'+(c.active?' active':'')}
+            onClick={()=>{ if (c.direct){ c.direct(); return; } if (openChip===c.id) closePop(); else openPop(c.id); }}>
+            {c.label && <span className="bc-chip-label">{c.label}</span>}
+            <span className="bc-chip-val">{c.val}</span>
+            {c.render && <span className="bc-chip-caret">▾</span>}
           </div>
         ))}
-      </>, chipsHost
-    )}
+      </>
+    );
 
-    {activeDef&&activeDef.render&&ReactDOM.createPortal(
-      <div className="pop" style={{left:popPos.x,top:popPos.y}} onClick={e=>e.stopPropagation()}>
-        {activeDef.render()}
-      </div>, document.body
-    )}
-  </>);
-}
-// Mount is controlled by mountBubbleChartV2() called from switchTab
-window.BubbleChartApp = BubbleChartApp;
+    const activeDef = chipDefs.find(c=>c.id===openChip);
+
+    return (
+      <>
+        <canvas ref={canvasRef}
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
+          onMouseDown={onMouseDown}
+          onMouseUp={onMouseUp}
+          onDoubleClick={onDoubleClick}
+          onWheel={onWheel}
+          style={{ display:'block', width:'100%', height:'100%' }}
+        />
+        {chipsHost && ReactDOM.createPortal(chipsNode, chipsHost)}
+        {activeDef && activeDef.render && ReactDOM.createPortal(
+          <div className="bc-pop" style={{ left:popPos.x, top:popPos.y }} onClick={e=>e.stopPropagation()}>
+            {activeDef.render()}
+          </div>,
+          document.body
+        )}
+      </>
+    );
+  }
+
+  window.BubbleChartApp = BubbleChartApp;
+})();
+</script>
+
+<div id="qbarMiniPop" class="qbar-mini-popup"></div>
+<script>
+(function(){
+  const pop = document.getElementById('qbarMiniPop');
+  let _activeTk = '';
+
+  function position(e){
+    const pad = 12, w = 320, h = pop.offsetHeight || 210;
+    const sW = window.innerWidth, sH = window.innerHeight;
+    let left = e.clientX + 16, top = e.clientY + 16;
+    if (left + w > sW - pad) left = e.clientX - w - 16;
+    if (top  + h > sH - pad) top  = e.clientY - h - 16;
+    pop.style.left = Math.max(pad, left) + 'px';
+    pop.style.top  = Math.max(pad, top)  + 'px';
+  }
+
+  function show(ticker, e){
+    if (_activeTk === ticker && pop.classList.contains('show')) { position(e); return; }
+    _activeTk = ticker;
+    pop.innerHTML = '';
+    const area = document.createElement('div');
+    area.className = 'qbar-mini-chart-area';
+    const mc = document.createElement('tv-mini-chart');
+    mc.setAttribute('symbol', ticker);
+    mc.setAttribute('time-frame', '7D');
+    mc.setAttribute('line-chart-type', 'Baseline');
+    mc.setAttribute('show-time-scale', '');
+    mc.setAttribute('theme', 'dark');
+    mc.style.cssText = 'width:100%;height:220px;display:block;margin-top:-2px;';
+    area.appendChild(mc);
+    pop.appendChild(area);
+    pop.classList.add('show');
+    position(e);
+  }
+
+  function hide(){
+    pop.classList.remove('show');
+    _activeTk = '';
+  }
+
+  document.getElementById('rotQBar').addEventListener('mouseover', function(e){
+    const chip = e.target.closest('.rot-qbar-tk[data-tk]');
+    if (chip) show(chip.dataset.tk, e);
+  });
+  document.getElementById('rotQBar').addEventListener('mousemove', function(e){
+    const chip = e.target.closest('.rot-qbar-tk[data-tk]');
+    if (chip && _activeTk === chip.dataset.tk) position(e);
+  });
+  document.getElementById('rotQBar').addEventListener('mouseleave', hide);
+  document.getElementById('rotQBar').addEventListener('mouseout', function(e){
+    if (!e.relatedTarget || !e.relatedTarget.closest('.rot-qbar-tk[data-tk]')) hide();
+  });
 })();
 </script>
 
 </body>
-</html>"""
+</html>
+"""
 
 
 # ---------------------------------------------------------------------------

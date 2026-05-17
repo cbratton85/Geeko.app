@@ -11,7 +11,7 @@ Run:  python server.py
 """
 
 from __future__ import annotations
-import json, sqlite3, threading, time, os, webbrowser
+import json, sqlite3, threading, time, os, webbrowser, gzip
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,8 +23,8 @@ from flask import Flask, Response, abort, make_response, request, send_file
 # ---------------------------------------------------------------------------
 # CONFIG — hardcoded, no .env needed
 # ---------------------------------------------------------------------------
-SUPABASE_URL = "ADD_THE_URL_HERE"
-SUPABASE_KEY = "ADD_YOUR_KEY_HERE"  # public key
+SUPABASE_URL = "https://kztjaygndfebxrpaiowt.supabase.co/rest/v1"
+SUPABASE_KEY = "sb_publishable_07Cquoeqt4a63kFjMfb_Yg_EsFcoDX0"  # public key
 SUPA_HDRS = {
     "apikey":        SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -37,9 +37,11 @@ _HERE    = Path(__file__).resolve().parent
 DATA_DIR = _HERE / "DATA"
 OHLCV_DB    = DATA_DIR / "ohlcv_cache.sqlite"
 PAYLOAD_DB  = DATA_DIR / "payload_cache.sqlite"
+HOLDINGS_DB = DATA_DIR / "holdings_local.sqlite"
 INDEX_HTML  = _HERE / "index.html"
 GEKKO_SESSION_FILE = DATA_DIR / "gekko_session.txt"   # paste Cookie header from dashboard.gekko.app here
 SIGNALS_HTML_PATH  = Path(r"C:\Users\chris\OneDrive\Desktop\Trading\GEKKO_BACKTESTER\gekko_backtest.html")
+SIGNALS_JSON_GZ_PATH = Path(r"C:\Users\chris\OneDrive\Desktop\Trading\GEKKO_BACKTESTER\gekko_signals_all.json.gz")
 PORT = 5000
 
 # Tray icon blink signal — incremented by API fetch workers, decremented when done.
@@ -78,22 +80,41 @@ def _load_signals_once(force: bool = False):
     with _signals_lock:
         if _signals_loaded and not force:
             return
-        if not SIGNALS_HTML_PATH.exists():
-            print(f"[signals] File not found: {SIGNALS_HTML_PATH}", flush=True)
+        src_path = SIGNALS_JSON_GZ_PATH if SIGNALS_JSON_GZ_PATH.exists() else SIGNALS_HTML_PATH
+        if not src_path.exists():
+            print(f"[signals] File not found: {SIGNALS_JSON_GZ_PATH} or {SIGNALS_HTML_PATH}", flush=True)
             _signals_loaded = True
             return
-        mtime = SIGNALS_HTML_PATH.stat().st_mtime
+        mtime = src_path.stat().st_mtime
         if _signals_loaded and mtime == _signals_mtime:
             return  # file hasn't changed
         try:
-            text = SIGNALS_HTML_PATH.read_text(encoding="utf-8", errors="replace")
-            # Extract the CURRENT=[...] array embedded as JS in the HTML
-            m = _re.search(r'const CURRENT\s*=\s*(\[.*?\]);', text, _re.DOTALL)
-            if not m:
-                print("[signals] Could not find CURRENT array in HTML", flush=True)
-                _signals_loaded = True
-                return
-            raw: list = json.loads(m.group(1))
+            raw: list = []
+            if src_path == SIGNALS_JSON_GZ_PATH:
+                with gzip.open(src_path, "rt", encoding="utf-8") as f:
+                    payload = json.load(f)
+                if isinstance(payload, list):
+                    raw = payload
+                elif isinstance(payload, dict):
+                    if isinstance(payload.get("historical_signals_detailed"), list):
+                        raw = payload.get("historical_signals_detailed") or []
+                    elif isinstance(payload.get("current_signals"), list):
+                        raw = payload.get("current_signals") or []
+                    else:
+                        raise ValueError("Signals JSON missing list fields")
+                else:
+                    raise ValueError("Signals JSON root must be list or object")
+                source_label = "JSON.GZ"
+            else:
+                text = SIGNALS_HTML_PATH.read_text(encoding="utf-8", errors="replace")
+                # Extract the CURRENT=[...] array embedded as JS in the HTML
+                m = _re.search(r'const CURRENT\s*=\s*(\[.*?\]);', text, _re.DOTALL)
+                if not m:
+                    print("[signals] Could not find CURRENT array in HTML", flush=True)
+                    _signals_loaded = True
+                    return
+                raw = json.loads(m.group(1))
+                source_label = "HTML"
             by_t: dict = defaultdict(list)
             for s in raw:
                 t = (s.get("ticker") or "").strip().upper()
@@ -102,7 +123,7 @@ def _load_signals_once(force: bool = False):
             _signals_by_ticker = dict(by_t)
             _signals_flat = sorted(raw, key=lambda s: s.get("signal_date", ""), reverse=True)
             _signals_mtime = mtime
-            print(f"[signals] Loaded {len(raw):,} signals for {len(_signals_by_ticker):,} tickers from HTML", flush=True)
+            print(f"[signals] Loaded {len(raw):,} signals for {len(_signals_by_ticker):,} tickers from {source_label}", flush=True)
         except Exception as exc:
             print(f"[signals] Load error: {exc}", flush=True)
         _signals_loaded = True
@@ -526,6 +547,7 @@ BB_MANAGERS = [
     ("0000923093", "Paul Tudor Jones"),
     ("0001135730", "Philippe Laffont"),
     ("0000915191", "Prem Watsa"),
+    ("0001649339", "Michael Burry"),
     ("0001350694", "Ray Dalio"),
     ("0001166309", "Roberto Mignone"),
     ("0001061768", "Seth Klarman"),
@@ -588,8 +610,26 @@ def _oconn() -> sqlite3.Connection:
     return conn
 
 
+def _hconn():
+    c = sqlite3.connect(HOLDINGS_DB, timeout=15, check_same_thread=False)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")
+    return c
+
+
 def init_stores() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with _hconn() as c:
+        c.execute("""CREATE TABLE IF NOT EXISTS holdings (
+            manager_cik  TEXT NOT NULL,
+            report_date  TEXT NOT NULL,
+            ticker       TEXT NOT NULL,
+            company_name TEXT,
+            shares       INTEGER,
+            value_usd    INTEGER,
+            source       TEXT,
+            PRIMARY KEY (manager_cik, report_date, ticker))""")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_h_cik ON holdings(manager_cik, report_date)")
     with _pconn() as c:
         c.execute("""CREATE TABLE IF NOT EXISTS payload_cache (
             bucket     TEXT NOT NULL,
@@ -1265,6 +1305,98 @@ def _compute_reversals_for_ticker(gi_rows: list[dict], price_map: dict[str, floa
 
 
 # ---------------------------------------------------------------------------
+# SECTOR NORMALISATION
+# ---------------------------------------------------------------------------
+# Maps any known raw sector string (lowercase) → canonical frontend key.
+# Canonical keys must match window.SECTOR_COLORS in html_builder.py exactly.
+_SECTOR_CANONICAL: dict[str, str] = {
+    # --- Exact canonical names (identity, keeps things tidy) ---
+    "technology":             "Technology",
+    "communication services": "Communication Services",
+    "financial services":     "Financial Services",
+    "healthcare":             "Healthcare",
+    "consumer cyclical":      "Consumer Cyclical",
+    "consumer defensive":     "Consumer Defensive",
+    "industrials":            "Industrials",
+    "energy":                 "Energy",
+    "real estate":            "Real Estate",
+    "basic materials":        "Basic Materials",
+    "utilities":              "Utilities",
+    # --- Yahoo Finance / yfinance alternates ---
+    "information technology": "Technology",
+    "tech":                   "Technology",
+    "consumer electronics":   "Technology",
+    "semiconductors":         "Technology",
+    "software":               "Technology",
+    "internet":               "Technology",
+    "electronic components":  "Technology",
+    "communication":          "Communication Services",
+    "communications":         "Communication Services",
+    "telecommunication services": "Communication Services",
+    "telecom":                "Communication Services",
+    "media":                  "Communication Services",
+    "financials":             "Financial Services",
+    "financial":              "Financial Services",
+    "finance":                "Financial Services",
+    "banks":                  "Financial Services",
+    "insurance":              "Financial Services",
+    "asset management":       "Financial Services",
+    "health care":            "Healthcare",
+    "health":                 "Healthcare",
+    "health technology":      "Healthcare",   # Finviz sub-sector
+    "medical":                "Healthcare",
+    "pharmaceuticals":        "Healthcare",
+    "pharmaceutical":         "Healthcare",
+    "biotech":                "Healthcare",
+    "biotechnology":          "Healthcare",
+    "medical devices":        "Healthcare",
+    "diagnostics":            "Healthcare",
+    "consumer discretionary": "Consumer Cyclical",
+    "consumer cyclicals":     "Consumer Cyclical",
+    "discretionary":          "Consumer Cyclical",
+    "consumer staples":       "Consumer Defensive",
+    "staples":                "Consumer Defensive",
+    "consumer defensives":    "Consumer Defensive",
+    "industrial":             "Industrials",
+    "aerospace & defense":    "Industrials",
+    "aerospace":              "Industrials",
+    "defense":                "Industrials",
+    "transportation":         "Industrials",
+    "construction":           "Industrials",
+    "materials":              "Basic Materials",
+    "basic material":         "Basic Materials",
+    "chemicals":              "Basic Materials",
+    "metals & mining":        "Basic Materials",
+    "mining":                 "Basic Materials",
+    "real-estate":            "Real Estate",
+    "realestate":             "Real Estate",
+    "reit":                   "Real Estate",
+    "reits":                  "Real Estate",
+    "utility":                "Utilities",
+    "electric utilities":     "Utilities",
+    "gas utilities":          "Utilities",
+    "oil & gas":              "Energy",
+    "oil and gas":            "Energy",
+    "oil":                    "Energy",
+    "gas":                    "Energy",
+    "renewable energy":       "Energy",
+}
+
+def _normalize_sector(raw: str) -> str:
+    """Map any raw sector string to the canonical frontend key, or return it unchanged."""
+    if not raw:
+        return ""
+    key = raw.strip().lower()
+    if key in _SECTOR_CANONICAL:
+        return _SECTOR_CANONICAL[key]
+    # Prefix fallback: e.g. "health technology services" → "Healthcare"
+    for alias, canonical in _SECTOR_CANONICAL.items():
+        if key.startswith(alias) or alias.startswith(key):
+            return canonical
+    return raw.strip()   # unknown — pass through as-is
+
+
+# ---------------------------------------------------------------------------
 # SUPABASE FETCH FUNCTIONS
 # ---------------------------------------------------------------------------
 def _fetch_gi_scores() -> tuple[dict, dict, dict]:
@@ -1282,9 +1414,27 @@ def _fetch_gi_scores() -> tuple[dict, dict, dict]:
     sector_map: dict = {}
     try:
         srows = _supa_get("screener_latest", {"select": "ticker,sector", "sector": "not.is.null"})
-        sector_map = {str(r["ticker"]).upper(): str(r["sector"]) for r in srows if r.get("ticker") and r.get("sector")}
+        sector_map = {
+            str(r["ticker"]).upper(): _normalize_sector(str(r["sector"]))
+            for r in srows
+            if r.get("ticker") and r.get("sector")
+        }
     except Exception:
         pass  # sector column may not exist; proceed without it
+
+    # --- Enrich from the `tickers` table for any tickers still missing sector ---
+    # The tickers table has more comprehensive sector coverage than screener_latest.
+    missing = [t for t in gi_map if not sector_map.get(t)]
+    if missing:
+        try:
+            ticker_meta = _fetch_ticker_meta(missing)
+            for t, meta in ticker_meta.items():
+                s = _normalize_sector(meta.get("sector", ""))
+                if s:
+                    sector_map[t] = s
+            print(f"[gi_scores] Sector enriched {len(ticker_meta):,} tickers from tickers table", flush=True)
+        except Exception as e:
+            print(f"[gi_scores] tickers-table sector fallback error: {e}", flush=True)
 
     # --- Fallback: gekko_index for ETFs / watchlist tickers missing from screener_latest ---
     # Build list of tickers we need but don't have yet
@@ -1322,16 +1472,57 @@ def _fetch_gi_scores() -> tuple[dict, dict, dict]:
     return gi_map, name_map, sector_map
 
 
+def _holdings_upsert_sqlite(rows: list[dict], source: str) -> None:
+    """Write holdings rows into the local SQLite store."""
+    if not rows:
+        return
+    with _hconn() as c:
+        c.executemany(
+            """INSERT INTO holdings
+               (manager_cik, report_date, ticker, company_name, shares, value_usd, source)
+               VALUES (:manager_cik, :report_date, :ticker, :company_name, :shares, :value_usd, :source)
+               ON CONFLICT(manager_cik, report_date, ticker) DO UPDATE SET
+                 company_name = excluded.company_name,
+                 shares       = excluded.shares,
+                 value_usd    = excluded.value_usd,
+                 source       = excluded.source""",
+            [{**r, "source": source} for r in rows],
+        )
+
+
+def _holdings_read_sqlite(cik: str) -> list[dict]:
+    """Read all locally stored rows for a manager."""
+    if not HOLDINGS_DB.exists():
+        return []
+    with _hconn() as c:
+        rows = c.execute(
+            "SELECT ticker, company_name, report_date, shares, value_usd FROM holdings WHERE manager_cik=?",
+            (cik,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def _fetch_holdings_raw() -> list[dict]:
-    """Fetch all holdings from Supabase using hardcoded manager lists."""
+    """Fetch holdings from Supabase, persist to local SQLite, serve from SQLite."""
     all_rows: list[dict] = []
 
     def _fetch_mgr(cik, name, table, source):
-        raw = _supa_get(table, {
-            "select": "ticker,company_name,report_date,shares,value_usd",
-            "manager_cik": f"eq.{cik}",
-            "order": "report_date.desc,value_usd.desc",
-        })
+        # Try Supabase first and persist whatever we get locally
+        try:
+            supa_rows = _supa_get(table, {
+                "select": "ticker,company_name,report_date,shares,value_usd",
+                "manager_cik": f"eq.{cik}",
+                "order": "report_date.desc,value_usd.desc",
+            })
+            if supa_rows:
+                clean = [{"manager_cik": cik, **r} for r in supa_rows
+                         if r.get("ticker") and r.get("report_date")]
+                _holdings_upsert_sqlite(clean, source)
+        except Exception as e:
+            print(f"[holdings] Supabase fetch failed for {name}: {e} — using local SQLite", flush=True)
+
+        # Always serve from SQLite (contains Supabase data + any backfill)
+        raw = _holdings_read_sqlite(cik)
         return _compute_changes(cik, name, source, raw)
 
     jobs = (
@@ -1596,7 +1787,8 @@ def _build_insiders_payload(raw_rows: list[dict], gi_map: dict, name_map: dict |
 
 
 def _build_conviction_payload(holdings: list[dict], insiders: list[dict], gi_map: dict,
-                               name_map: dict | None = None) -> list[dict]:
+                               name_map: dict | None = None,
+                               sector_map: dict | None = None) -> list[dict]:
     """Build conviction summary: one row per ticker, aggregating manager + insider signals."""
     # Current holdings only (not SOLD); track per-manager change types
     curr_h: dict[str, dict] = {}
@@ -1656,7 +1848,8 @@ def _build_conviction_payload(holdings: list[dict], insiders: list[dict], gi_map
         elif "SELL" in tt or "SALE" in tt or "DISPOSE" in tt:
             ins_sells[t] += 1
 
-    _name_map = name_map or {}
+    _name_map    = name_map    or {}
+    _sector_map  = sector_map  or {}
     all_tickers = set(curr_h.keys()) | set(ins_buys.keys()) | set(ins_sells.keys())
     out = []
     for t in sorted(all_tickers):
@@ -1672,6 +1865,7 @@ def _build_conviction_payload(holdings: list[dict], insiders: list[dict], gi_map
         out.append({
             "ticker":          t,
             "company":         company,
+            "sector":          _sector_map.get(t, ""),
             "manager_count":   len(mgrs),
             "manager_detail":  "\n".join(mgrs),      # newline-sep so tooltip shows one per row
             "total_value":     tv,
@@ -2847,7 +3041,7 @@ def _run_full_sync() -> None:
             name_map = _enrich_name_map(name_map, conv_tickers)
             if name_map:
                 payload_set(B_NAMES, name_map)
-            c_payload = _build_conviction_payload(raw_h, raw_i, gi_map, name_map)
+            c_payload = _build_conviction_payload(raw_h, raw_i, gi_map, name_map, sector_map)
             payload_set(B_CONVICTION, c_payload)
             bm_payload = _build_buy_meta(raw_i)
             payload_set(B_BUY_META, bm_payload)
@@ -3330,7 +3524,7 @@ def api_conviction_rebuild():
     """Re-fetch holdings + insiders from Supabase and rebuild conviction payload."""
     _tray_fetch_start()
     try:
-        gi_map, name_map, _ = _fetch_gi_scores()
+        gi_map, name_map, sector_map = _fetch_gi_scores()
         raw_h = _fetch_holdings_raw()
         raw_i = _fetch_insiders_raw()
         conv_tickers = list({
@@ -3343,7 +3537,7 @@ def api_conviction_rebuild():
         payload_set(B_HOLDINGS, _build_holdings_payload(raw_h, gi_map))
         payload_set(B_INSIDERS, _build_insiders_payload(raw_i, gi_map, name_map))
         payload_set(B_BUY_META, _build_buy_meta(raw_i))
-        c_payload = _build_conviction_payload(raw_h, raw_i, gi_map, name_map)
+        c_payload = _build_conviction_payload(raw_h, raw_i, gi_map, name_map, sector_map)
         payload_set(B_CONVICTION, c_payload)
         return _json_resp({"ok": True, "count": len(c_payload)})
     except Exception as e:
@@ -3357,7 +3551,7 @@ def api_bubble_rebuild():
     """Re-fetch conviction + insiders + bubble-size from Supabase."""
     _tray_fetch_start()
     try:
-        gi_map, name_map, _ = _fetch_gi_scores()
+        gi_map, name_map, sector_map = _fetch_gi_scores()
         raw_h = _fetch_holdings_raw()
         raw_i = _fetch_insiders_raw()
         conv_tickers = list({
@@ -3370,7 +3564,7 @@ def api_bubble_rebuild():
         payload_set(B_HOLDINGS, _build_holdings_payload(raw_h, gi_map))
         payload_set(B_INSIDERS, _build_insiders_payload(raw_i, gi_map, name_map))
         payload_set(B_BUY_META, _build_buy_meta(raw_i))
-        payload_set(B_CONVICTION, _build_conviction_payload(raw_h, raw_i, gi_map, name_map))
+        payload_set(B_CONVICTION, _build_conviction_payload(raw_h, raw_i, gi_map, name_map, sector_map))
         bubble = _fetch_bubble_size()
         payload_set(B_BUBBLE, bubble)
         return _json_resp({"ok": True, "count": len(bubble)})
@@ -3452,6 +3646,10 @@ def api_signals():
             (s.get("robust_hold") or 0) + (s.get("robust_tp") or 0) +
             (s.get("robust_half") or 0) + (s.get("robust_dd") or 0)
         )
+        if not robust_total:
+            cs = s.get("confirm_score")
+            if isinstance(cs, (int, float)):
+                robust_total = max(0, min(10, int(round(cs * 10))))
         rows.append({
             "ticker":              s.get("ticker", ""),
             "signal_date":         s.get("signal_date", ""),
@@ -3459,10 +3657,10 @@ def api_signals():
             "signal_source":       s.get("signal_source", ""),
             "signal_mode":         s.get("signal_mode", ""),
             "pos_rank":            s.get("pos_rank"),
-            "score":               s.get("score"),
+            "score":               s.get("score", s.get("sentiment_score")),
             "robust_total":        robust_total,
             "days_ago":            s.get("days_ago"),
-            "current_gi":          s.get("current_gi"),
+            "current_gi":          s.get("current_gi", s.get("gi", s.get("sentiment_score"))),
             "thresh":              s.get("thresh"),
             "threshold_mode":      s.get("threshold_mode", "fixed_global"),
             "threshold_label":     s.get("threshold_label", ""),
